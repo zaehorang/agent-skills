@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+
+# 실수로 자격증명이 섞이는 걸 방어
+auth.json
+*.sqlite
+*.sqlite-*
+history.jsonl
+.env
