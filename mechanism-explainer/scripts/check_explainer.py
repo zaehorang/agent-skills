@@ -159,6 +159,22 @@ def check(path: Path) -> tuple[list[str], list[str]]:
         finally:
             Path(tmp_path).unlink(missing_ok=True)
 
+    descs = re.findall(r"\bdesc\s*:\s*((?:\"(?:[^\"\\]|\\.)*\"\s*\+?\s*)+)", text)
+    over = []
+    for index, raw in enumerate(descs, 1):
+        joined = "".join(re.findall(r"\"((?:[^\"\\]|\\.)*)\"", raw))
+        plain = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", joined)).strip()
+        # 목표는 280자(2절 ③). 여기서 거는 선은 레퍼런스 예제의 실제 천장이다 —
+        # 더 조이면 잘 쓴 explainer 까지 걸려 경고 자체를 무시하게 된다.
+        if len(plain) > 360:
+            over.append(f"{index}단계 {len(plain)}자")
+    if over:
+        warn.append(
+            "내레이션이 길다 (목표 280자) — " + ", ".join(over)
+            + " · 리드 한 줄 + 불렛 2~4개로 접고, 지울 것은 조작이 이미 보여주는 문장이다."
+            + " 아까운 내용은 terms 나 판정 문장으로 옮긴다 (SKILL.md 2절 ③)"
+        )
+
     if scan.buttons and not scan.aria_live:
         warn.append("aria-live 자리가 없다 — 조작 결과를 말해 주는 판정 문장에 붙었는지 확인한다")
     if "aria-pressed" not in text and scan.buttons > 2:
