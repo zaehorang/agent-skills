@@ -1,0 +1,1246 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>컨테이너와 쿠버네티스가 돌아가는 원리</title>
+<style>
+:root{
+  --bg:#f6f7f9; --panel:#ffffff; --panel2:#f0f2f5; --ink:#15181d; --ink2:#5a6372;
+  --line:#d8dde5; --line2:#e8ebf0;
+  --acc:#1f6feb; --acc-w:#e7f0ff;
+  --ok:#128a53; --ok-w:#e2f5ec;
+  --warn:#c2410c; --warn-w:#fdeee4;
+  --err:#c02626; --err-w:#fdecec;
+  --code:#0f1319; --code-ink:#dbe2ea;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Pretendard","Apple SD Gothic Neo","Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2128; --ink:#e6edf3; --ink2:#9aa6b2;
+    --line:#2d333b; --line2:#22272e;
+    --acc:#58a6ff; --acc-w:#132744;
+    --ok:#3fb950; --ok-w:#0f2a1a;
+    --warn:#e0862a; --warn-w:#2d1d0b;
+    --err:#f85149; --err-w:#2d1113;
+    --code:#010409; --code-ink:#c9d1d9;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0d1117; --panel:#161b22; --panel2:#1c2128; --ink:#e6edf3; --ink2:#9aa6b2;
+  --line:#2d333b; --line2:#22272e;
+  --acc:#58a6ff; --acc-w:#132744;
+  --ok:#3fb950; --ok-w:#0f2a1a;
+  --warn:#e0862a; --warn-w:#2d1d0b;
+  --err:#f85149; --err-w:#2d1113;
+  --code:#010409; --code-ink:#c9d1d9;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;
+     font-size:15px;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.wrap{max-width:1680px;margin:0 auto;padding:20px 18px 64px}
+
+/* ── header ── */
+header.top{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;
+  border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:16px}
+header.top h1{font-size:19px;margin:0;letter-spacing:-.01em}
+header.top p{margin:0;color:var(--ink2);font-size:13px;flex:1 1 260px}
+.themebtn{border:1px solid var(--line);background:var(--panel);color:var(--ink2);
+  border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit}
+.themebtn:hover{border-color:var(--acc);color:var(--acc)}
+
+/* ── step rail ── */
+.rail{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;margin-bottom:6px}
+.rail button{border:1px solid var(--line);background:var(--panel);
+  color:var(--ink2);border-radius:9px;padding:7px 6px 8px;cursor:pointer;font-family:inherit;
+  font-size:11.5px;line-height:1.3;text-align:center;transition:all .18s}
+.rail button .no{display:block;font-size:10px;opacity:.65;font-variant-numeric:tabular-nums}
+.rail button:hover{border-color:var(--acc);color:var(--ink)}
+.rail button.on{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+.rail button.on .no{opacity:.8}
+.rail button.seen{color:var(--ink)}
+
+/* ── layout ── */
+.cols{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:1060px){ .cols{grid-template-columns:minmax(0,1fr)} }
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px}
+.stagewrap{padding:0;overflow:hidden;position:relative}
+#cam{transform-origin:0 0;transition:transform .55s cubic-bezier(.25,.8,.3,1)}
+.viewbtn{position:absolute;right:10px;bottom:10px;z-index:2;border:1px solid var(--line);
+  background:var(--panel);color:var(--ink2);border-radius:8px;padding:5px 11px;font-size:11.5px;
+  font-family:inherit;cursor:pointer;opacity:.85;backdrop-filter:blur(3px)}
+.viewbtn:hover{border-color:var(--acc);color:var(--acc);opacity:1}
+
+/* ── demo bar (조작 + 결과를 무대 바로 위에) ── */
+.demobar{border-bottom:1px solid var(--line2);padding:11px 13px;background:var(--panel2);
+  border-radius:13px 13px 0 0}
+.demobar.empty{display:none}
+.demorow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.demobtn{border:1px solid var(--acc);background:var(--acc);color:#fff;border-radius:9px;
+  padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
+.demobtn:hover{filter:brightness(1.08)}
+.demobtn.on{background:var(--panel);color:var(--acc)}
+.hint{font-size:12.5px;color:var(--ink2);flex:1 1 200px;min-width:160px}
+.verdict{margin-top:8px;font-size:13px;padding:9px 11px;border-radius:8px;
+  background:var(--panel);border:1px solid var(--line2);color:var(--ink);min-height:36px;
+  display:block;line-height:1.55}
+.verdict b{color:var(--acc)}
+.verdict.bad b{color:var(--err)}
+.verdict.good b{color:var(--ok)}
+
+/* ── svg stage ── */
+.stage{display:block;width:100%;height:auto;background:var(--panel)}
+.reg{transition:opacity .3s}
+.reg.dim{opacity:.2}
+.regbox{fill:var(--panel2);stroke:var(--line2);stroke-width:1}
+.regttl{fill:var(--ink2);font:600 11px var(--sans);letter-spacing:.02em}
+.nd rect{fill:var(--panel);stroke:var(--line);stroke-width:1.4;transition:fill .3s,stroke .3s,stroke-width .3s}
+.nd .t1{fill:var(--ink);font:600 11.5px var(--sans);text-anchor:middle}
+.nd .t2{fill:var(--ink2);font:500 9.5px var(--mono);text-anchor:middle}
+.nd.idle rect{stroke-dasharray:none;opacity:.72}
+.nd.pending rect{stroke-dasharray:4 3;stroke:var(--ink2)}
+.nd.active rect{stroke:var(--acc);stroke-width:2.4;fill:var(--acc-w)}
+.nd.active .t1{fill:var(--acc)}
+.nd.done rect{stroke:var(--ok);stroke-width:1.8;fill:var(--ok-w)}
+.nd.done .t1{fill:var(--ok)}
+.nd.warn rect{stroke:var(--warn);stroke-width:2;fill:var(--warn-w)}
+.nd.warn .t1{fill:var(--warn)}
+.nd.err rect{stroke:var(--err);stroke-width:2.4;fill:var(--err-w)}
+.nd.err .t1{fill:var(--err)}
+.nd.active rect{animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{0%,100%{stroke-opacity:1}50%{stroke-opacity:.45}}
+.badge{font:700 9px var(--mono);text-anchor:middle;fill:var(--ink2)}
+.nd.done .badge{fill:var(--ok)} .nd.err .badge{fill:var(--err)} .nd.active .badge{fill:var(--acc)}
+.nd.warn .badge{fill:var(--warn)}
+.edge{fill:none;stroke:var(--line);stroke-width:1.6;marker-end:url(#arw);transition:stroke .3s}
+.edge.done{stroke:var(--ok);marker-end:url(#arwOk)}
+.edge.active{stroke:var(--acc);stroke-width:2.2;marker-end:url(#arwAcc);
+  stroke-dasharray:9 6;animation:flow .9s linear infinite}
+.edge.err{stroke:var(--err);marker-end:url(#arwErr);stroke-dasharray:3 4}
+.edge.off{opacity:.18}
+@keyframes flow{to{stroke-dashoffset:-30}}
+.elab{fill:var(--ink2);font:600 10px var(--sans)}
+.elab.on{fill:var(--acc)}
+
+/* ── right column ── */
+.narr{padding:15px 17px}
+.narr .kicker{font:700 10.5px var(--mono);letter-spacing:.08em;color:var(--acc);text-transform:uppercase}
+.narr h2{font-size:17.5px;margin:6px 0 9px;line-height:1.38;letter-spacing:-.01em}
+.narr p{margin:0 0 9px;font-size:14px;color:var(--ink)}
+.narr p.q{color:var(--ink2);font-size:13px;border-left:2px solid var(--line);padding-left:10px}
+.narr em{font-style:normal;background:var(--acc-w);color:var(--acc);padding:0 4px;border-radius:4px;font-weight:600}
+.narr .no{background:var(--err-w);color:var(--err)}
+
+.panes{display:grid;gap:10px;margin-top:12px}
+@media (min-width:640px){ .panes.two{grid-template-columns:1fr 1fr} }
+.pane{border:1px solid var(--line2);border-radius:10px;overflow:hidden;background:var(--panel2);min-width:0}
+.pane h4{margin:0;font-size:11px;padding:6px 10px;background:var(--panel2);color:var(--ink2);
+  border-bottom:1px solid var(--line2);font-weight:600;display:flex;justify-content:space-between;gap:6px}
+.pane h4 span{font-family:var(--mono);font-size:10px;opacity:.75}
+.pane pre{margin:0;padding:9px 10px;background:var(--code);color:var(--code-ink);
+  font-family:var(--mono);font-size:11.5px;line-height:1.62;overflow-x:auto;
+  font-variant-numeric:tabular-nums}
+.pane.plain pre{background:var(--panel);color:var(--ink)}
+.hl{display:block;background:rgba(31,111,235,.20);box-shadow:inset 2px 0 0 var(--acc);
+    padding-left:6px;margin-left:-6px}
+.hl.ok{background:rgba(18,138,83,.20);box-shadow:inset 2px 0 0 var(--ok)}
+.hl.bad{background:rgba(192,38,38,.22);box-shadow:inset 2px 0 0 var(--err)}
+.hl.mut{background:transparent;box-shadow:inset 2px 0 0 var(--line);opacity:.5}
+.cm{color:#7d8899}
+.ky{color:#79c0ff} .st{color:#a5d6ff} .gd{color:#7ee787} .bd{color:#ff7b72} .wr{color:#e3b341}
+.cursor{display:inline-block;width:.55em;height:1em;background:var(--code-ink);
+  vertical-align:-2px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* ── terms ── */
+details.terms{margin-top:12px;border:1px solid var(--line2);border-radius:10px;background:var(--panel2)}
+details.terms>summary{cursor:pointer;padding:8px 12px;font-size:12.5px;color:var(--ink2);
+  font-weight:600;list-style:none}
+details.terms>summary::-webkit-details-marker{display:none}
+details.terms>summary::before{content:"＋ ";color:var(--acc)}
+details.terms[open]>summary::before{content:"－ "}
+details.terms .body{padding:2px 12px 11px;border-top:1px solid var(--line2)}
+details.terms dl{margin:0}
+details.terms dt{font-size:13px;font-weight:700;margin-top:9px}
+details.terms dt span{font-family:var(--mono);font-size:10.5px;color:var(--ink2);font-weight:500;margin-left:5px}
+details.terms dd{margin:2px 0 0;font-size:12.5px;color:var(--ink2);line-height:1.58}
+details.terms dd b{color:var(--ink)}
+
+/* ── nav ── */
+.nav{display:flex;gap:9px;align-items:center;margin-top:16px;flex-wrap:wrap}
+.nav button{border:1px solid var(--line);background:var(--panel);color:var(--ink);
+  border-radius:9px;padding:8px 16px;font-size:13.5px;cursor:pointer;font-family:inherit;font-weight:600}
+.nav button:hover:not(:disabled){border-color:var(--acc);color:var(--acc)}
+.nav button:disabled{opacity:.38;cursor:default}
+.count{font-family:var(--mono);font-size:12.5px;color:var(--ink2);font-variant-numeric:tabular-nums}
+.keyhint{font-size:11.5px;color:var(--ink2);margin-left:auto}
+footer{margin-top:26px;padding-top:12px;border-top:1px solid var(--line);
+  font-size:11.5px;color:var(--ink2);line-height:1.7}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms!important;animation-iteration-count:1!important;
+    transition-duration:.001ms!important}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>컨테이너와 쿠버네티스가 돌아가는 원리</h1>
+  <p>내 코드 한 덩어리가 <b>격리된 실행 단위</b>가 되고, 죽어도 <b>스스로 되살아나는 상태</b>가 되기까지 — 9단계.</p>
+  <button class="themebtn" id="themeBtn" type="button">◐ 테마</button>
+</header>
+
+<nav class="rail" id="rail" aria-label="단계 이동"></nav>
+
+<div class="cols">
+  <!-- 좌: 조작 + 무대 -->
+  <section class="card stagewrap">
+    <div class="demobar" id="demobar">
+      <div class="demorow">
+        <button class="demobtn" id="demoBtn" type="button"></button>
+        <span class="hint" id="demoHint"></span>
+      </div>
+      <div class="verdict" id="verdict" role="status" aria-live="polite"></div>
+    </div>
+
+    <svg class="stage" id="stage" viewBox="0 0 1160 630" role="img"
+         aria-label="개발자 컴퓨터에서 이미지가 만들어져 창고를 거쳐 클러스터의 작업용 컴퓨터에서 실행되기까지의 전체 그림">
+      <defs>
+        <marker id="arw" markerWidth="9" markerHeight="9" refX="7.4" refY="3.2" orient="auto">
+          <path d="M0,0 L7.4,3.2 L0,6.4 z" fill="currentColor" style="fill:var(--line)"/></marker>
+        <marker id="arwAcc" markerWidth="9" markerHeight="9" refX="7.4" refY="3.2" orient="auto">
+          <path d="M0,0 L7.4,3.2 L0,6.4 z" style="fill:var(--acc)"/></marker>
+        <marker id="arwOk" markerWidth="9" markerHeight="9" refX="7.4" refY="3.2" orient="auto">
+          <path d="M0,0 L7.4,3.2 L0,6.4 z" style="fill:var(--ok)"/></marker>
+        <marker id="arwErr" markerWidth="9" markerHeight="9" refX="7.4" refY="3.2" orient="auto">
+          <path d="M0,0 L7.4,3.2 L0,6.4 z" style="fill:var(--err)"/></marker>
+      </defs>
+      <g id="cam">
+
+      <!-- ── 개발자 컴퓨터 ── -->
+      <g class="reg" id="r_dev">
+        <rect class="regbox" x="16" y="44" width="286" height="470" rx="14"/>
+        <text class="regttl" x="30" y="66">개발자 컴퓨터</text>
+        <text class="regttl" x="36" y="238" style="opacity:.8">구워진 이미지 · 읽기 전용</text>
+        <g class="nd idle" id="n_src" transform="translate(36,84)">
+          <rect width="246" height="56" rx="9"/>
+          <text class="t1" x="123" y="25">앱 코드 + 만드는 법 설명서</text>
+          <text class="t2" x="123" y="43">Dockerfile</text>
+        </g>
+        <g class="nd idle" id="n_build" transform="translate(36,166)">
+          <rect width="246" height="46" rx="9"/>
+          <text class="t1" x="123" y="21">설명서를 한 줄씩 실행해 굽기</text>
+          <text class="t2" x="123" y="37">docker build</text>
+        </g>
+        <g class="nd idle" id="n_l1" transform="translate(56,246)">
+          <rect width="206" height="38" rx="7"/>
+          <text class="t1" x="103" y="17">① 바탕 운영체제 파일</text>
+          <text class="t2" x="103" y="31">FROM python:3.11-slim</text>
+        </g>
+        <g class="nd idle" id="n_l2" transform="translate(56,290)">
+          <rect width="206" height="38" rx="7"/>
+          <text class="t1" x="103" y="17">② 라이브러리 설치 결과</text>
+          <text class="t2" x="103" y="31">RUN pip install -r req.txt</text>
+        </g>
+        <g class="nd idle" id="n_l3" transform="translate(56,334)">
+          <rect width="206" height="38" rx="7"/>
+          <text class="t1" x="103" y="17">③ 내 앱 코드</text>
+          <text class="t2" x="103" y="31">COPY app/ .</text>
+        </g>
+        <g class="nd idle" id="n_ctr" transform="translate(36,410)">
+          <rect width="246" height="56" rx="9"/>
+          <text class="t1" x="123" y="25">격리되어 실행 중인 한 벌</text>
+          <text class="t2" x="123" y="43">container</text>
+        </g>
+      </g>
+
+      <!-- ── 이미지 창고 ── -->
+      <g class="reg" id="r_reg">
+        <rect class="regbox" x="322" y="186" width="152" height="168" rx="14"/>
+        <text class="regttl" x="332" y="206">이미지 창고</text>
+        <g class="nd idle" id="n_reg" transform="translate(336,216)">
+          <rect width="124" height="110" rx="9"/>
+          <text class="t1" x="62" y="44">올려두면</text>
+          <text class="t1" x="62" y="60">어디서든 받는다</text>
+          <text class="t2" x="62" y="80">registry</text>
+        </g>
+      </g>
+
+      <!-- ── 관제부 ── -->
+      <g class="reg" id="r_ctl">
+        <rect class="regbox" x="492" y="44" width="652" height="150" rx="14"/>
+        <text class="regttl" x="504" y="64">클러스터 관제부 · control plane</text>
+        <g class="nd idle" id="n_api" transform="translate(506,80)">
+          <rect width="148" height="96" rx="9"/>
+          <text class="t1" x="74" y="38">들어온 요청 받고</text>
+          <text class="t1" x="74" y="54">규칙에 맞는지 검사</text>
+          <text class="t2" x="74" y="74">API server</text>
+        </g>
+        <g class="nd idle" id="n_etcd" transform="translate(668,80)">
+          <rect width="134" height="96" rx="9"/>
+          <text class="t1" x="67" y="38">"이렇게 돼 있어야"</text>
+          <text class="t1" x="67" y="54">를 적어두는 장부</text>
+          <text class="t2" x="67" y="74">etcd</text>
+        </g>
+        <g class="nd idle" id="n_ctrl" transform="translate(816,80)">
+          <rect width="150" height="96" rx="9"/>
+          <text class="t1" x="75" y="38">장부와 실제를</text>
+          <text class="t1" x="75" y="54">쉬지 않고 비교</text>
+          <text class="t2" x="75" y="74">controller</text>
+        </g>
+        <g class="nd idle" id="n_sched" transform="translate(980,80)">
+          <rect width="150" height="96" rx="9"/>
+          <text class="t1" x="75" y="38">어느 컴퓨터에</text>
+          <text class="t1" x="75" y="54">올릴지 고르기</text>
+          <text class="t2" x="75" y="74">scheduler</text>
+        </g>
+      </g>
+
+      <!-- ── 작업용 컴퓨터 1 ── -->
+      <g class="reg" id="r_n1">
+        <rect class="regbox" x="492" y="344" width="322" height="164" rx="14"/>
+        <text class="regttl" x="504" y="364">작업용 컴퓨터 1 · node</text>
+        <g class="nd idle" id="n_kube1" transform="translate(506,372)">
+          <rect width="140" height="36" rx="7"/>
+          <text class="t1" x="70" y="16">이 컴퓨터의 관리자</text>
+          <text class="t2" x="70" y="30">kubelet</text>
+        </g>
+        <g class="nd idle" id="n_p1" transform="translate(506,428)">
+          <rect width="92" height="56" rx="8"/>
+          <text class="t1" x="46" y="22">앱 한 벌</text>
+          <text class="t2 ver" x="46" y="37">v1</text>
+          <text class="badge" x="46" y="50">Pod</text>
+        </g>
+        <g class="nd idle" id="n_p2" transform="translate(608,428)">
+          <rect width="92" height="56" rx="8"/>
+          <text class="t1" x="46" y="22">앱 한 벌</text>
+          <text class="t2 ver" x="46" y="37">v1</text>
+          <text class="badge" x="46" y="50">Pod</text>
+        </g>
+        <g class="nd idle" id="n_p3" transform="translate(710,428)">
+          <rect width="92" height="56" rx="8"/>
+          <text class="t1" x="46" y="22">앱 한 벌</text>
+          <text class="t2 ver" x="46" y="37">v1</text>
+          <text class="badge" x="46" y="50">Pod</text>
+        </g>
+      </g>
+
+      <!-- ── 작업용 컴퓨터 2 ── -->
+      <g class="reg" id="r_n2">
+        <rect class="regbox" x="826" y="344" width="318" height="164" rx="14"/>
+        <text class="regttl" x="838" y="364">작업용 컴퓨터 2 · node</text>
+        <g class="nd idle" id="n_kube2" transform="translate(840,372)">
+          <rect width="140" height="36" rx="7"/>
+          <text class="t1" x="70" y="16">이 컴퓨터의 관리자</text>
+          <text class="t2" x="70" y="30">kubelet</text>
+        </g>
+        <g class="nd idle" id="n_p4" transform="translate(840,428)">
+          <rect width="92" height="56" rx="8"/>
+          <text class="t1" x="46" y="22">앱 한 벌</text>
+          <text class="t2 ver" x="46" y="37">v1</text>
+          <text class="badge" x="46" y="50">Pod</text>
+        </g>
+        <g class="nd idle" id="n_p5" transform="translate(942,428)">
+          <rect width="92" height="56" rx="8"/>
+          <text class="t1" x="46" y="22">앱 한 벌</text>
+          <text class="t2 ver" x="46" y="37">v1</text>
+          <text class="badge" x="46" y="50">Pod</text>
+        </g>
+        <g class="nd idle" id="n_p6" transform="translate(1044,428)">
+          <rect width="92" height="56" rx="8"/>
+          <text class="t1" x="46" y="22">앱 한 벌</text>
+          <text class="t2 ver" x="46" y="37">v1</text>
+          <text class="badge" x="46" y="50">Pod</text>
+        </g>
+      </g>
+
+      <!-- ── 접속 통로 ── -->
+      <g class="reg" id="r_net">
+        <rect class="regbox" x="492" y="528" width="652" height="88" rx="14"/>
+        <text class="regttl" x="504" y="546">접속 통로</text>
+        <g class="nd idle" id="n_user" transform="translate(506,552)">
+          <rect width="150" height="52" rx="9"/>
+          <text class="t1" x="75" y="23">사용자 요청</text>
+          <text class="t2" x="75" y="39">GET /items</text>
+        </g>
+        <g class="nd idle" id="n_svc" transform="translate(706,552)">
+          <rect width="200" height="52" rx="9"/>
+          <text class="t1" x="100" y="23">바뀌지 않는 접속 주소</text>
+          <text class="t2" x="100" y="39">Service · shop:80</text>
+        </g>
+      </g>
+
+      <!-- ── 연결선 ── -->
+      <g id="edges">
+        <path class="edge off" id="e_src_build" d="M159,140 L159,163"/>
+        <path class="edge off" id="e_build_img" d="M159,212 L159,243"/>
+        <path class="edge off" id="e_img_ctr"   d="M159,372 L159,407"/>
+        <path class="edge off" id="e_img_reg"   d="M264,300 C296,300 306,282 333,274"/>
+        <text class="elab" id="l_push" x="272" y="264">push</text>
+        <path class="edge off" id="e_reg_k"     d="M462,300 C516,306 542,332 572,368"/>
+        <text class="elab" id="l_pull" x="336" y="376">이미지 내려받기</text>
+        <path class="edge off" id="e_dev_api"   d="M304,100 C400,94 442,110 502,117"/>
+        <text class="elab" id="l_apply" x="322" y="84">선언서 제출 · kubectl apply</text>
+        <path class="edge off" id="e_api_etcd"  d="M656,128 L665,128"/>
+        <path class="edge off" id="e_etcd_ctrl" d="M804,128 L813,128"/>
+        <path class="edge off" id="e_ctrl_sched" d="M968,128 L977,128"/>
+        <path class="edge off" id="e_ctrl_api"  d="M886,178 C828,212 692,212 628,182"/>
+        <text class="elab" id="l_watch" x="726" y="212">계속 지켜보기</text>
+        <path class="edge off" id="e_sched_api" d="M1052,178 C1014,250 714,258 634,188"/>
+        <path class="edge off" id="e_api_k1"    d="M634,178 L634,369"/>
+        <path class="edge off" id="e_api_k2"    d="M648,180 C684,300 878,296 904,368"/>
+        <path class="edge off" id="e_user_svc"  d="M658,578 L702,578"/>
+        <path class="edge off" id="e_svc_n1"    d="M756,550 C742,514 600,512 552,488"/>
+        <path class="edge off" id="e_svc_n2"    d="M876,550 C886,520 888,514 886,488"/>
+      </g>
+      </g>
+    </svg>
+    <button class="viewbtn" id="viewBtn" type="button" aria-pressed="false">전체 보기</button>
+  </section>
+
+  <!-- 우: 설명 + 산출물 -->
+  <section>
+    <div class="card narr">
+      <span class="kicker" id="kicker"></span>
+      <h2 id="title"></h2>
+      <div id="desc"></div>
+      <div class="panes" id="panes"></div>
+      <div id="termsHost"></div>
+    </div>
+
+    <div class="nav">
+      <button id="prev" type="button">← 이전</button>
+      <button id="next" type="button">다음 →</button>
+      <span class="count" id="count"></span>
+      <span class="keyhint">← → 키로도 넘어갑니다</span>
+    </div>
+  </section>
+</div>
+
+<footer>
+  이 그림은 실제 구조를 이해에 맞게 단순화한 것입니다. 실제로는 모든 부품이 접수 창구(API server)를 통해서만
+  서로의 상태를 읽고 쓰며, 작업용 컴퓨터는 수십~수천 대, 한 컴퓨터 안의 앱 한 벌(Pod)도 여러 개일 수 있습니다.
+  코드·로그 예시는 실제 포맷을 따르되 값은 읽기 쉽게 줄였습니다.
+</footer>
+</div>
+<script>
+(function(){
+"use strict";
+var RM = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function $(id){ return document.getElementById(id); }
+
+/* ── 상태 헬퍼 ───────────────────────────────── */
+var NST = ["idle","pending","active","done","warn","err"];
+var PODS = ["n_p1","n_p2","n_p3","n_p4","n_p5","n_p6"];
+var BASE = { n_p1:[506,428], n_p2:[608,428], n_p3:[710,428],
+             n_p4:[840,428], n_p5:[942,428], n_p6:[1044,428] };
+var REGS = ["r_dev","r_reg","r_ctl","r_n1","r_n2","r_net"];
+var REGBOX = { r_dev:[16,44,286,470], r_reg:[322,186,152,168], r_ctl:[492,44,652,150],
+               r_n1:[492,344,322,164], r_n2:[826,344,318,164], r_net:[492,528,652,88] };
+var VW = 1160, VH = 630, fullView = false;
+/* 단계가 켠 구역만 화면에 꽉 차게 — 흐려진 구역은 무대 밖으로 밀려 잘린다 */
+function viewBoxFor(s){
+  var f = (!fullView && s && s.graph) ? s.graph.focus : null;
+  if(!f || !f.length) return [0,0,VW,VH];
+  var x0=1e9, y0=1e9, x1=-1e9, y1=-1e9;
+  f.forEach(function(id){
+    var b = REGBOX[id]; if(!b) return;
+    x0=Math.min(x0,b[0]); y0=Math.min(y0,b[1]);
+    x1=Math.max(x1,b[0]+b[2]); y1=Math.max(y1,b[1]+b[3]);
+  });
+  if(x0 > x1) return [0,0,VW,VH];
+  var pad = 22;
+  return [x0-pad, y0-pad, (x1-x0)+pad*2, (y1-y0)+pad*2];
+}
+function applyView(s){
+  var cam = $("cam"); if(!cam) return;
+  var b = viewBoxFor(s);
+  var sc = Math.min(VW/b[2], VH/b[3], 1.95);
+  var tx = VW/2 - sc*(b[0]+b[2]/2), ty = VH/2 - sc*(b[1]+b[3]/2);
+  /* 지도 밖 빈 공간이 화면에 들어오지 않게 — 남는 자리는 흐려진 이웃 구역이 채운다 */
+  tx = Math.min(0, Math.max(VW*(1-sc), tx));
+  ty = Math.min(0, Math.max(VH*(1-sc), ty));
+  cam.style.transform = "translate(" + tx.toFixed(1) + "px," + ty.toFixed(1) + "px) scale(" + sc.toFixed(3) + ")";
+}
+var EDGES = ["e_src_build","e_build_img","e_img_ctr","e_img_reg","e_reg_k","e_dev_api",
+  "e_api_etcd","e_etcd_ctrl","e_ctrl_sched","e_ctrl_api","e_sched_api","e_api_k1","e_api_k2",
+  "e_user_svc","e_svc_n1","e_svc_n2"];
+var LABS = { e_img_reg:"l_push", e_reg_k:"l_pull", e_dev_api:"l_apply", e_ctrl_api:"l_watch" };
+var NODES = ["n_src","n_build","n_l1","n_l2","n_l3","n_ctr","n_reg","n_api","n_etcd","n_ctrl",
+  "n_sched","n_kube1","n_kube2","n_user","n_svc"].concat(PODS);
+
+function setNode(id, s){
+  var el = $(id); if(!el) return;
+  for(var i=0;i<NST.length;i++) el.classList.remove(NST[i]);
+  el.classList.add(s || "idle");
+}
+function setEdge(id, s){
+  var el = $(id); if(!el) return;
+  el.classList.remove("off","active","done","err");
+  if(s && s!=="on") el.classList.add(s);
+  var lab = LABS[id] && $(LABS[id]);
+  if(lab) lab.classList.toggle("on", s==="active");
+  if(lab) lab.style.opacity = (s && s!=="off") ? 1 : .25;
+}
+function setVer(id, txt){
+  var el = $(id); if(!el) return;
+  var t = el.querySelector(".ver"); if(t) t.textContent = txt;
+}
+function setPos(id, dy, opacity, trans){
+  var el = $(id), b = BASE[id]; if(!el || !b) return;
+  el.style.transition = (RM || !trans) ? "none" : trans;
+  el.style.transform  = "translate(" + b[0] + "px," + (b[1]+dy) + "px)";
+  if(opacity !== undefined) el.style.opacity = opacity;
+}
+function reflow(){ void document.documentElement.offsetWidth; }
+
+var T_MOVE = "transform .55s cubic-bezier(.25,.8,.3,1), opacity .35s linear";
+var T_IN   = "transform .5s cubic-bezier(.2,.85,.3,1.08), opacity .4s linear";
+var T_OUT  = "transform .7s cubic-bezier(.4,0,.75,.3), opacity .28s linear 420ms";
+
+/* 살아 있는 화면 · 타이머 정리 */
+var timers = [];
+function tick(fn, ms){ var id = setInterval(fn, ms); timers.push(id); return id; }
+function delay(fn, ms){ var id = setTimeout(fn, ms); timers.push(id); return id; }
+function stopAll(){ timers.forEach(function(id){ clearInterval(id); clearTimeout(id); }); timers = []; }
+
+function logTo(id, line, max){
+  var el = $(id); if(!el) return;
+  var rows = el.getAttribute("data-rows") ? JSON.parse(el.getAttribute("data-rows")) : [];
+  rows.push(line);
+  while(rows.length > (max||7)) rows.shift();
+  el.setAttribute("data-rows", JSON.stringify(rows));
+  el.innerHTML = rows.join("\n") + "\n<span class='cursor'></span>";
+}
+function clearLog(id){ var el=$(id); if(el){ el.setAttribute("data-rows","[]"); el.innerHTML="<span class='cursor'></span>"; } }
+
+/* ── 패널 조각 ───────────────────────────────── */
+function pane(title, sub, body, plain, id){
+  return "<div class='pane" + (plain?" plain":"") + "'><h4>" + title +
+         "<span>" + (sub||"") + "</span></h4><pre" + (id?" id='"+id+"'":"") + ">" + body + "</pre></div>";
+}
+var C = { c:function(s){return "<span class='cm'>"+s+"</span>";},
+          k:function(s){return "<span class='ky'>"+s+"</span>";},
+          s:function(s){return "<span class='st'>"+s+"</span>";},
+          g:function(s){return "<span class='gd'>"+s+"</span>";},
+          b:function(s){return "<span class='bd'>"+s+"</span>";},
+          w:function(s){return "<span class='wr'>"+s+"</span>";} };
+function hl(cls, s){ return "<span class='hl "+cls+"'>"+s+"</span>"; }
+
+/* ── 단계 정의 ───────────────────────────────── */
+var STEPS = [];
+
+/* 1 ─ 왜 격리가 필요한가 */
+STEPS.push({
+  nav:"섞이는 앱",
+  kicker:"출발점",
+  title:"앱 두 개가 한 컴퓨터를 같이 쓰면, 한쪽을 고칠 때 다른 쪽이 깨진다",
+  desc:"<p>오른쪽 그림이 앞으로 계속 볼 전체 지도입니다. <b>왼쪽</b>은 내가 코드를 쓰는 컴퓨터, "+
+       "<b>가운데</b>는 만든 결과물을 올려두는 창고, <b>오른쪽</b>은 그 결과물을 실제로 돌리는 컴퓨터 여러 대입니다. "+
+       "지금은 전부 꺼져 있고, 단계를 넘길 때마다 <b>그 단계가 쓰는 구역만 켜지면서 크게 확대</b>됩니다. 전체 그림을 다시 보려면 무대 오른쪽 아래 \"전체 보기\"를 누르세요.</p>"+
+       "<p>문제는 여기서 시작합니다. 앱은 코드만으로 돌지 않습니다. 언어 버전, 라이브러리, 설정 파일, "+
+       "운영체제 패키지까지 <em>주변 환경 전체</em>가 맞아야 돕니다. 그런데 컴퓨터 한 대에 그 환경은 하나뿐입니다.</p>"+
+       "<p class='q'>버튼을 눌러, 한쪽 앱에 맞춰 라이브러리를 올렸을 때 다른 앱이 어떻게 되는지 보세요.</p>",
+  graph:{},
+  panesTwo:true,
+  panels:
+    "<div class='pane'><h4>격리 없이 한 컴퓨터에<span>host</span></h4><pre id='p1a'></pre></div>" +
+    "<div class='pane'><h4>각자 컨테이너 안에<span>isolated</span></h4><pre id='p1b'></pre></div>",
+  terms:[
+    {ko:"컨테이너", en:"container", def:"앱과 <b>그 앱이 필요로 하는 주변 환경 전체</b>를 한 덩어리로 묶어, 다른 앱과 파일·프로세스를 섞이지 않게 격리한 실행 단위. 가상 머신과 달리 운영체제 커널은 컴퓨터 주인 것을 같이 씁니다."},
+    {ko:"격리", en:"namespace · cgroup", def:"리눅스 커널의 두 기능. <b>namespace</b>는 프로세스 목록·파일 경로·네트워크를 따로 보이게 만들고, <b>cgroup</b>은 CPU·메모리를 얼마까지 쓸지 제한합니다. 컨테이너는 이 둘로 만들어집니다."},
+    {ko:"이미지", en:"image", def:"컨테이너를 찍어내는 <b>틀</b>. 이 단계 오른쪽 칸에서 \"각자 자기 파이썬을 갖고 있다\"고 한 그 덩어리이며, 다음 단계에서 이걸 어떻게 굽는지 봅니다."}
+  ],
+  enter:function(){ render1(false); },
+  demo:{ label:"추천앱에 맞춰 라이브러리를 3.11로 올리기", labelOn:"3.9로 되돌리기",
+    hint:"왼쪽 칸의 결제앱 상태가 어떻게 되는지 보세요.",
+    run:function(on){
+      render1(on);
+      return on
+        ? {t:"왼쪽은 추천앱을 살리자 <b>결제앱이 죽었습니다</b>. 환경이 하나뿐이라 둘 중 하나만 고를 수 있습니다. 오른쪽은 각자 자기 파이썬을 이미지 안에 갖고 있어 아무 일도 없습니다.", tone:"bad"}
+        : {t:"되돌렸습니다. 이번엔 추천앱이 못 돕니다 — 격리가 없으면 <b>어느 쪽을 맞춰도 한쪽은 깨집니다</b>.", tone:""};
+    }}
+});
+function render1(on){
+  var a = $("p1a"), b = $("p1b"); if(!a||!b) return;
+  a.innerHTML =
+    "$ python -V\n" +
+    (on ? "Python 3.11.7      " + C.c("# 방금 올림") : "Python 3.9.18      " + C.c("# 이 컴퓨터에 딱 하나")) + "\n\n" +
+    (on ? hl("bad", "결제앱  필요 3.9   " + C.b("✘ 기동 실패")) : hl("ok", "결제앱  필요 3.9   " + C.g("✔ 정상")) ) + "\n" +
+    (on ? hl("ok",  "추천앱  필요 3.11  " + C.g("✔ 정상")) : hl("bad","추천앱  필요 3.11  " + C.b("✘ 기동 실패")) ) + "\n\n" +
+    C.c("환경이 하나 → 둘 중 하나만 만족");
+  b.innerHTML =
+    "결제앱 이미지 안   python 3.9.18   " + C.g("✔ 정상") + "\n" +
+    "추천앱 이미지 안   python 3.11.7   " + C.g("✔ 정상") + "\n\n" +
+    (on ? hl("ok", C.c("한쪽 이미지를 바꿔도 다른 이미지는 그대로")) : C.c("각자 자기 환경을 통째로 들고 있음")) + "\n" +
+    C.c("공유하는 것은 커널뿐, 파일·프로세스는 따로");
+}
+
+/* 2 ─ 이미지 굽기 */
+STEPS.push({
+  nav:"이미지 굽기",
+  kicker:"1단계 · build",
+  title:"설명서를 위에서부터 한 줄씩 실행해, 결과를 층층이 쌓아 굳힌다",
+  desc:"<p>격리된 한 덩어리를 만들려면 <b>무엇을 어떤 순서로 넣을지</b>를 적은 설명서가 필요합니다. "+
+       "굽는 쪽은 이 설명서를 한 줄씩 실행하고, <em>한 줄이 끝날 때마다 그 시점의 파일 상태를 통째로 한 층으로 굳힙니다</em>.</p>"+
+       "<p>층으로 굳히는 이유는 <b>다시 구울 때 앞 층을 재사용</b>하기 위해서입니다. 위에서 n번째 줄까지 내용이 "+
+       "그대로면 그 층들은 이미 구워진 것을 그대로 쓰고, 바뀐 줄부터만 다시 굽습니다.</p>"+
+       "<p>그래서 설명서의 <b>줄 순서가 곧 빌드 속도</b>입니다. 자주 바뀌는 앱 코드를 위에 두면 그 아래 층이 매번 함께 무효가 됩니다.</p>",
+  graph:{ focus:["r_dev"], n:{ n_src:"done", n_build:"active", n_l1:"done", n_l2:"done", n_l3:"active" },
+          e:{ e_src_build:"done", e_build_img:"active" } },
+  panesTwo:false,
+  panels:
+    pane("만드는 법 설명서", "Dockerfile",
+      C.k("FROM")+" python:3.11-slim            "+C.c("① 바탕")+"\n"+
+      C.k("WORKDIR")+" /app\n"+
+      C.k("COPY")+" requirements.txt .          "+C.c("② 의존성 목록만 먼저")+"\n"+
+      C.k("RUN")+"  pip install -r requirements.txt\n"+
+      C.k("COPY")+" app/ .                      "+C.c("③ 자주 바뀌는 내 코드는 맨 뒤")+"\n"+
+      C.k("CMD")+"  [\"python\",\"main.py\"]", false) +
+    pane("굽기 기록", "docker build .", "", false, "p2log"),
+  terms:[
+    {ko:"층", en:"layer", def:"설명서 한 줄을 실행한 뒤 바뀐 파일들만 모아 굳힌 <b>읽기 전용 덩어리</b>. 이미지는 이런 층을 아래에서 위로 겹친 것이고, 위층은 아래층 파일을 덮어쓸 수 있습니다."},
+    {ko:"빌드 캐시", en:"build cache", def:"이전에 구운 층을 재사용하는 것. <b>바뀐 줄 아래의 층은 모두 무효</b>가 되므로, 설명서 줄 순서를 바꾸는 것만으로 빌드 시간이 크게 달라집니다."},
+    {ko:"바탕 이미지", en:"base image", def:"맨 아래에 까는 남이 만들어 둔 이미지(<code>python:3.11-slim</code>). 운영체제 파일과 런타임이 이미 들어 있어서, 내가 굽는 것은 그 위 두세 층뿐입니다."}
+  ],
+  enter:function(){ base2(); },
+  demo:{ label:"의존성 목록(requirements.txt)도 고쳐보기", labelOn:"앱 코드만 고친 상태로 되돌리기",
+    hint:"CACHED 표시가 몇 줄 남는지, 총 시간이 어떻게 바뀌는지 보세요.",
+    run:function(on){
+      if(!on){ base2(); }
+      else {
+        render2(true);
+        setNode("n_l1","done"); setNode("n_l2","warn"); setNode("n_l3","warn");
+      }
+      return on
+        ? {t:"의존성 목록이 바뀌자 <b>그 아래 층까지 전부 다시 구워졌습니다</b> — 32.8초. 라이브러리 설치는 매번 가장 비싼 줄입니다.", tone:"bad"}
+        : {t:"앱 코드만 바뀌면 설치 결과 층은 <b>그대로 재사용</b>되어 1.2초에 끝납니다. 같은 설명서인데 고친 줄의 위치가 27배 차이를 만듭니다.", tone:"good"};
+    }}
+});
+/* 이 단계의 기준 상태 — 진입도 되돌리기도 여기를 거친다 */
+function base2(){
+  render2(false);
+  setNode("n_l1","done"); setNode("n_l2","done"); setNode("n_l3","active");
+}
+function render2(on){
+  var el = $("p2log"); if(!el) return;
+  el.innerHTML = on
+    ? "$ docker build -t shop:1.4 .\n"+
+      hl("mut","=> [1/3] FROM python:3.11-slim        "+C.g("CACHED"))+"\n"+
+      hl("bad","=> [2/3] RUN  pip install -r req.txt  "+C.w("31.4s"))+"\n"+
+      hl("bad","=> [3/3] COPY app/ .                  "+C.w("0.4s"))+"\n"+
+      "=> exporting layers                   1.0s\n"+
+      C.c("-----------------------------------------")+"\n"+
+      "총 소요                               "+C.b("32.8s")
+    : "$ docker build -t shop:1.3 .\n"+
+      hl("mut","=> [1/3] FROM python:3.11-slim        "+C.g("CACHED"))+"\n"+
+      hl("mut","=> [2/3] RUN  pip install -r req.txt  "+C.g("CACHED"))+"\n"+
+      hl("ok", "=> [3/3] COPY app/ .                  "+C.w("0.3s"))+"\n"+
+      "=> exporting layers                   0.6s\n"+
+      C.c("-----------------------------------------")+"\n"+
+      "총 소요                               "+C.g("1.2s");
+}
+
+/* 3 ─ 창고 */
+STEPS.push({
+  nav:"창고에 올리기",
+  kicker:"2단계 · push / pull",
+  title:"구운 이미지는 창고에 올려두고, 실행할 컴퓨터가 필요한 층만 내려받는다",
+  desc:"<p>이미지를 구운 컴퓨터와 실제로 돌릴 컴퓨터는 보통 다릅니다. 그래서 가운데 <b>창고</b>에 한 번 올려두고, "+
+       "실행할 컴퓨터들이 각자 내려받습니다.</p>"+
+       "<p>여기서 층으로 나눈 구조가 두 번째로 값을 합니다. 창고는 층을 <em>내용으로 만든 지문(다이제스트)</em>으로 구분하기 때문에, "+
+       "이미 갖고 있는 층은 <b>올리지도 내려받지도 않습니다</b>. 같은 바탕을 쓰는 앱이 20개여도 바탕은 창고에 하나뿐입니다.</p>",
+  graph:{ focus:["r_dev","r_reg"], n:{ n_l1:"done", n_l2:"done", n_l3:"done", n_build:"done", n_src:"done", n_reg:"active" },
+          e:{ e_src_build:"done", e_build_img:"done", e_img_reg:"active" } },
+  panesTwo:false,
+  panels:
+    pane("올리기 기록", "docker push", "", false, "p3log") +
+    pane("창고에 실제로 저장된 것", "by digest",
+      "sha256:a1b2c3…  "+C.s("178.2MB")+"  바탕 OS + 파이썬   "+C.c("← 두 앱이 함께 씀")+"\n"+
+      "sha256:d4e5f6…  "+C.s("  4.0MB")+"  shop 의존성\n"+
+      "sha256:77aa11…  "+C.s("  0.2MB")+"  shop 앱 코드\n"+
+      "sha256:9b0c2d…  "+C.s("  4.1MB")+"  recommend 의존성 + 코드\n"+
+      C.c("---------------------------------------------")+"\n"+
+      "이미지 2개, 실제 디스크 "+C.g("186.5MB")+C.c("  (단순 합계 364MB)"), false),
+  terms:[
+    {ko:"창고", en:"registry", def:"이미지를 올려두고 내려받는 서버(Docker Hub, GitHub Container Registry, 사내 Harbor 등). <b>층 단위로</b> 주고받습니다."},
+    {ko:"태그", en:"tag", def:"<code>shop:1.4</code>처럼 사람이 붙이는 이름표. <b>옮겨 붙일 수 있어서</b> 같은 <code>:latest</code>가 어제와 오늘 다른 이미지를 가리킬 수 있습니다."},
+    {ko:"지문", en:"digest", def:"층 내용을 해시한 <code>sha256:…</code> 값. 내용이 1바이트만 달라도 값이 바뀌므로 <b>같은 지문 = 같은 내용</b>이 보장됩니다. 중복 제거와 \"어제 그 이미지\" 고정이 모두 여기서 나옵니다."}
+  ],
+  enter:function(){ render3(false); },
+  demo:{ label:"같은 바탕을 쓰는 두 번째 앱 이미지도 올리기", labelOn:"첫 이미지만 올린 상태로 되돌리기",
+    hint:"두 번째 올리기에서 실제로 전송되는 양이 얼마인지 보세요.",
+    run:function(on){
+      render3(on);
+      return on
+        ? {t:"두 번째 이미지는 바탕 178MB를 <b>다시 올리지 않고</b> 4.1MB만 전송했습니다. 창고가 층을 지문으로 구분해 이미 있는 것을 알아보기 때문입니다.", tone:"good"}
+        : {t:"첫 이미지는 가진 게 없으니 182.3MB 전부 올라갑니다. 버튼을 눌러 두 번째 이미지를 올려보세요.", tone:""};
+    }}
+});
+function render3(on){
+  var el = $("p3log"); if(!el) return;
+  el.innerHTML = on
+    ? "$ docker push registry.io/recommend:0.9\n"+
+      hl("mut","a1b2c3: "+C.g("Layer already exists")+"      "+C.c("바탕 OS"))+"\n"+
+      hl("mut","d4e5f6: "+C.g("Layer already exists")+"      "+C.c("공통 라이브러리"))+"\n"+
+      hl("ok", "9b0c2d: Pushed                    "+C.w("4.1MB"))+"\n"+
+      C.c("---------------------------------------------")+"\n"+
+      "전송량 "+C.g("4.1MB")+"   소요 "+C.g("0.9s")
+    : "$ docker push registry.io/shop:1.4\n"+
+      hl("bad","a1b2c3: Pushed                    "+C.w("178.2MB"))+"\n"+
+      hl("bad","d4e5f6: Pushed                    "+C.w("4.0MB"))+"\n"+
+      hl("bad","77aa11: Pushed                    "+C.w("0.2MB"))+"\n"+
+      C.c("---------------------------------------------")+"\n"+
+      "전송량 "+C.b("182.3MB")+"  소요 "+C.b("41.2s");
+}
+
+/* 4 ─ 컨테이너 실행 */
+STEPS.push({
+  nav:"한 벌 실행",
+  kicker:"3단계 · run",
+  title:"이미지 위에 얇은 쓰기 칸을 한 장 더 얹고, 커널로 둘러싸 프로세스를 띄운다",
+  desc:"<p>실행할 때 이미지는 <b>건드리지 않습니다</b>. 읽기 전용 층 더미 위에 <em>얇은 쓰기 칸</em>을 한 장 얹고, "+
+       "실행 중 생기는 변경은 전부 그 칸에만 기록합니다. 같은 이미지로 컨테이너를 10개 띄워도 이미지는 한 벌이고 쓰기 칸만 10장입니다.</p>"+
+       "<p>이 구조의 대가가 바로 <b class='no'>컨테이너를 지우면 쓰기 칸도 같이 사라진다</b>는 것입니다. "+
+       "남겨야 하는 데이터는 컨테이너 밖의 저장 공간(볼륨)에 연결해 두어야 합니다.</p>"+
+       "<p class='q'>버튼으로 컨테이너를 지웠다 다시 만들어 보세요. 두 칸의 결과가 갈립니다.</p>",
+  graph:{ focus:["r_dev"], n:{ n_src:"done", n_build:"done", n_l1:"done", n_l2:"done", n_l3:"done", n_ctr:"active" },
+          e:{ e_src_build:"done", e_build_img:"done", e_img_ctr:"active" } },
+  panesTwo:true,
+  panels:
+    "<div class='pane'><h4>볼륨 없이 실행<span>기본</span></h4><pre id='p4a'></pre></div>" +
+    "<div class='pane'><h4>볼륨을 붙여 실행<span>-v data:/var/lib</span></h4><pre id='p4b'></pre></div>",
+  terms:[
+    {ko:"쓰기 칸", en:"writable layer · copy-on-write", def:"컨테이너마다 하나씩 생기는 맨 위 층. 아래 읽기 전용 층의 파일을 고치면 <b>그 파일만 위로 복사해서</b> 고칩니다. 컨테이너를 지우면 이 칸만 사라지고 이미지는 그대로입니다."},
+    {ko:"볼륨", en:"volume", def:"컨테이너 바깥에 따로 두는 저장 공간을 컨테이너 안 경로에 이어 붙인 것. <b>컨테이너 수명과 분리</b>되므로 지웠다 다시 만들어도 내용이 남습니다."},
+    {ko:"1번 프로세스", en:"PID 1", def:"컨테이너 안에서 보면 내 앱이 <b>1번 프로세스</b>입니다. 바깥 컴퓨터에서 보면 수천 번대 일반 프로세스일 뿐이고, 번호가 달라 보이는 것이 격리(namespace)가 일하는 증거입니다."}
+  ],
+  enter:function(){ base4(); },
+  demo:{ label:"컨테이너를 지우고 같은 이미지로 다시 만들기", labelOn:"지우기 전 상태로 되돌리기",
+    hint:"두 칸 모두에 같은 일을 겁니다. 주문 데이터가 어느 쪽에 남는지 보세요.",
+    run:function(on){
+      if(!on){ base4(); }
+      else { render4(true); setNode("n_ctr","warn"); }
+      return on
+        ? {t:"같은 이미지로 똑같이 되살아났지만, 왼쪽의 <b>주문 데이터 1,284건은 쓰기 칸과 함께 사라졌습니다</b>. 오른쪽은 볼륨에 있었으므로 그대로입니다.", tone:"bad"}
+        : {t:"양쪽 모두 정상 실행 중이고 데이터도 있습니다. 버튼을 눌러 컨테이너를 지워보세요.", tone:""};
+    }}
+});
+function base4(){ render4(false); setNode("n_ctr","active"); }
+function render4(on){
+  var a=$("p4a"), b=$("p4b"); if(!a||!b) return;
+  var head = "$ docker run -d shop:1.4\n" + C.c("# 컨테이너 안에서 본 프로세스") + "\nPID 1  python main.py\n\n";
+  a.innerHTML = head +
+    (on ? "$ docker rm -f shop && docker run -d shop:1.4\n" : "") +
+    "이미지 층 3개      " + C.g("그대로") + "\n" +
+    (on ? hl("bad","쓰기 칸          " + C.b("새로 생성 (빈 칸)"))
+        : hl("ok", "쓰기 칸          누적 24MB")) + "\n" +
+    (on ? hl("bad","주문 데이터      " + C.b("0건 — 소실"))
+        : hl("ok", "주문 데이터      " + C.g("1,284건")));
+  b.innerHTML = head.replace("docker run -d shop:1.4","docker run -d -v data:/var/lib shop:1.4") +
+    (on ? "$ docker rm -f shop && docker run -d -v data:… \n" : "") +
+    "이미지 층 3개      " + C.g("그대로") + "\n" +
+    (on ? hl("mut","쓰기 칸          새로 생성 (빈 칸)")
+        : "쓰기 칸          누적 2MB") + "\n" +
+    hl("ok", "주문 데이터      " + C.g("1,284건") + (on ? "  " + C.c("← 볼륨에 있었음") : ""));
+}
+
+/* 5 ─ 한 벌로는 못 버틴다 */
+STEPS.push({
+  nav:"한 벌의 한계",
+  kicker:"전환점",
+  title:"컨테이너는 \"한 벌 띄우기\"까지만 책임진다. 그게 죽으면 아무도 안 살린다",
+  desc:"<p>여기까지로 <b>환경 문제는 끝</b>났습니다. 어디서 띄워도 같은 한 벌이 뜹니다. 그런데 운영에는 다른 문제가 남습니다.</p>"+
+       "<p>지금 그 한 벌을 살아 있게 만드는 주체는 <b class='no'>사람</b>입니다. 죽으면 사람이 다시 띄우고, "+
+       "트래픽이 늘면 사람이 더 띄우고, 컴퓨터가 고장나면 사람이 다른 컴퓨터에 옮겨 띄웁니다. 새벽 3시에도.</p>"+
+       "<p>그래서 명령을 하나씩 내리는 방식(<em>이걸 해라</em>) 대신, <em>이런 상태여야 한다</em>를 적어 내고 "+
+       "그 상태를 유지하는 일을 기계에 맡기는 쪽으로 넘어갑니다. 오른쪽 구역이 그 기계입니다.</p>"+
+       "<p class='q'>버튼으로 프로세스를 죽여보세요. 왼쪽 로그가 어떻게 되는지 보세요.</p>",
+  graph:{ focus:["r_dev"], n:{ n_l1:"done", n_l2:"done", n_l3:"done", n_ctr:"done" },
+          e:{ e_img_ctr:"done" } },
+  panesTwo:false,
+  panels:
+    pane("실행 중인 컴퓨터의 요청 기록", "실시간", "", false, "p5log") +
+    "<div class='pane plain'><h4>이때 사람이 해야 하는 일<span>수동 운영</span></h4><pre id='p5job'></pre></div>",
+  terms:[
+    {ko:"원하는 상태", en:"desired state", def:"\"shop 앱이 항상 <b>3벌</b> 떠 있어야 한다\"처럼 <b>결과</b>를 적은 것. 거기까지 가는 절차는 적지 않습니다. 쿠버네티스에 내는 것은 명령이 아니라 전부 이 형태입니다."},
+    {ko:"선언형", en:"declarative", def:"절차를 시키는 대신 원하는 상태를 적어 내는 방식. 같은 선언서를 <b>몇 번 내도 결과가 같고</b>, 현재 상태가 어떻든 그 상태로 수렴시킵니다."},
+    {ko:"오케스트레이터", en:"orchestrator", def:"여러 컴퓨터에 흩어진 컨테이너들을 <b>원하는 상태에 맞춰 배치·재기동·교체</b>하는 관리자. 쿠버네티스가 그중 하나입니다."}
+  ],
+  enter:function(){ base5(); },
+  demo:{ label:"컨테이너 프로세스 죽이기 (메모리 초과)", labelOn:"사람이 다시 띄우기",
+    hint:"로그가 계속 흐르는지, 그리고 누가 이 상황을 되돌리는지 보세요.",
+    run:function(on){
+      if(!on){ base5(); }
+      else { live5(true); setNode("n_ctr","err"); }
+      return on
+        ? {t:"요청이 전부 실패하고 있고, <b>아무도 다시 띄우지 않습니다</b>. 되돌리려면 사람이 버튼을 눌러야 합니다 — 그게 지금 이 버튼입니다.", tone:"bad"}
+        : {t:"사람이 손으로 되살렸습니다. 다음 단계부터는 이 일을 대신할 쪽에 <b>원하는 상태를 적어 냅니다</b>.", tone:""};
+    }}
+});
+function base5(){ live5(false); setNode("n_ctr","done"); }
+function live5(dead){
+  stopAll();
+  var job = $("p5job");
+  if(job) job.innerHTML = dead
+    ? hl("bad","1. 알림 받기        " + C.b("새벽 3:14")) + "\n" +
+      hl("bad","2. 원인 확인        docker logs") + "\n" +
+      hl("bad","3. 다시 띄우기      docker run …") + "\n" +
+      hl("bad","4. 트래픽 늘면 더 띄우기") + "\n" +
+      hl("bad","5. 컴퓨터가 죽으면 다른 컴퓨터에서 1~4 반복")
+    : "1. 알림 받기        " + C.c("(대기)") + "\n2. 원인 확인\n3. 다시 띄우기\n4. 트래픽 늘면 더 띄우기\n5. 컴퓨터가 죽으면 다른 컴퓨터에서 1~4 반복";
+  clearLog("p5log");
+  var n = 0;
+  tick(function(){
+    n++;
+    var t = "03:1" + (4 + Math.floor(n/6)) + ":" + (10 + (n*7)%49);
+    logTo("p5log", dead
+      ? t + " GET /items  " + C.b("502 connection refused")
+      : t + " GET /items  " + C.g("200") + "  " + (11 + (n*13)%40) + "ms", 7);
+  }, 950);
+}
+
+/* 6 ─ 선언서를 내면 벌어지는 일 */
+STEPS.push({
+  nav:"선언서 제출",
+  kicker:"4단계 · apply",
+  title:"선언서는 접수 창구 한 곳으로만 들어가고, 나머지는 장부를 지켜보다 각자 움직인다",
+  desc:"<p>오른쪽 관제부가 켜졌습니다. 중요한 건 <b>부품들이 서로 직접 명령하지 않는다</b>는 점입니다. "+
+       "모두 <em>접수 창구</em>를 통해서만 장부를 읽고 씁니다.</p>"+
+       "<p>순서는 이렇습니다. ① 창구가 선언서를 검사해 ② 장부에 \"3벌 있어야 함\"을 적고 → "+
+       "③ 비교기가 장부와 실제를 보고 \"3벌 부족\"을 알아채 만들 것을 등록 → ④ 배치 담당이 각 벌을 어느 컴퓨터에 둘지 정해 다시 장부에 적고 → "+
+       "⑤ 각 컴퓨터의 관리자가 자기 몫을 보고 <b>이미지를 내려받아 컨테이너를 띄웁니다</b>.</p>"+
+       "<p>아무도 \"띄워라\"는 명령을 받지 않았습니다. <b>장부가 바뀐 것을 각자 보고 움직였을 뿐</b>입니다.</p>",
+  graph:{ focus:["r_reg","r_ctl","r_n1","r_n2"], n:{ n_reg:"done" }, e:{} },
+  panesTwo:false,
+  panels:
+    pane("내가 내는 선언서", "deployment.yaml",
+      C.k("kind")+": Deployment\n"+
+      C.k("spec")+":\n"+
+      "  "+hl("ok",C.k("replicas")+": "+C.s("3")+"            "+C.c("← 항상 3벌"))+"\n"+
+      "  "+C.k("template")+":\n"+
+      "    "+C.k("spec")+":\n"+
+      "      "+C.k("containers")+":\n"+
+      "        - "+C.k("image")+": "+C.s("registry.io/shop:1.4")+"\n"+
+      "          "+C.k("resources")+": { limits: { memory: 512Mi } }", false) +
+    pane("클러스터에서 벌어지는 일", "kubectl get events -w", "", false, "live6"),
+  terms:[
+    {ko:"앱 한 벌", en:"Pod", def:"쿠버네티스가 다루는 <b>가장 작은 실행 단위</b>. 보통 컨테이너 하나지만, 붙어 다녀야 하는 보조 컨테이너가 있으면 같이 묶입니다. 한 벌 안의 컨테이너들은 IP와 저장 공간을 공유합니다."},
+    {ko:"접수 창구", en:"API server", def:"클러스터에 들어오는 <b>모든 요청이 반드시 지나는 단 하나의 입구</b>. 형식과 권한을 검사해 통과한 것만 장부에 적습니다. 다른 부품들은 서로 직접 부르지 않고 이 창구를 통해서만 장부를 읽고 씁니다."},
+    {ko:"장부", en:"etcd", def:"클러스터의 <b>모든 상태를 담은 단 하나의 저장소</b>. 원하는 상태도, 지금 실제 상태도 전부 여기 있습니다. 장부를 잃으면 클러스터 기억이 통째로 사라집니다."},
+    {ko:"컴퓨터 관리자", en:"kubelet", def:"작업용 컴퓨터마다 하나씩 도는 프로그램. 장부에서 <b>자기 컴퓨터에 배정된 몫</b>만 보고, 이미지를 내려받아 컨테이너를 띄우고 상태를 다시 보고합니다."}
+  ],
+  enter:function(){ seq6(); },
+  demo:{ auto:true, label:"일부러 틀린 선언서 내보기 (replicas: -1)", labelOn:"제대로 된 선언서로 되돌리기",
+    hint:"거절이 어느 지점에서 일어나는지, 그 뒤 단계가 하나라도 움직이는지 보세요.",
+    run:function(on){
+      if(!on){ seq6(); return {t:"정상 흐름을 다시 재생합니다. 접수 → 기록 → 비교 → 배치 → 띄우기 순서를 따라가 보세요.", tone:""}; }
+      stopAll(); resetGraph();
+      setEdge("e_dev_api","err"); setNode("n_api","err");
+      setNode("n_etcd","idle"); setNode("n_ctrl","idle"); setNode("n_sched","idle");
+      clearLog("live6");
+      logTo("live6", "→ kubectl apply -f broken.yaml");
+      logTo("live6", C.b("error: spec.replicas: Invalid value: -1"));
+      logTo("live6", C.b("       must be greater than or equal to 0"));
+      logTo("live6", C.c("장부 변화 없음 · 비교기 동작 없음 · 새 앱 한 벌 없음"));
+      return {t:"창구에서 <b>즉시 거절</b>되어 장부에 아예 기록되지 않았습니다. 뒤쪽 부품은 장부만 보므로 아무 일도 일어나지 않습니다 — 검사가 입구 한 곳에 모여 있는 이유입니다.", tone:"bad"};
+    }}
+});
+function showPod(id, st, dly){
+  delay(function(){
+    setPos(id, 14, 0, "none"); reflow();
+    setNode(id, st); setPos(id, 0, 1, T_IN);
+  }, dly);
+}
+function seq6(){
+  stopAll(); resetGraph(); clearLog("live6");
+  setNode("n_reg","done");
+  var S = [
+    [0, function(){
+      setEdge("e_dev_api","active"); setNode("n_api","active");
+      logTo("live6", "→ kubectl apply -f deployment.yaml"); }],
+    [1000, function(){
+      setNode("n_api","done"); setEdge("e_dev_api","done");
+      setEdge("e_api_etcd","active"); setNode("n_etcd","active");
+      logTo("live6", C.c("① 접수 창구") + " 형식·권한 검사 통과"); }],
+    [2000, function(){
+      setNode("n_etcd","done"); setEdge("e_api_etcd","done");
+      setEdge("e_ctrl_api","active"); setNode("n_ctrl","active");
+      logTo("live6", C.c("② 장부") + " 기록: shop 앱 한 벌 " + C.w("3개") + " 있어야 함"); }],
+    [3000, function(){
+      setNode("n_ctrl","done"); setEdge("e_ctrl_api","done"); setEdge("e_ctrl_sched","active");
+      setNode("n_sched","active");
+      logTo("live6", C.c("③ 비교기") + " 원하는 3 · 실제 " + C.b("0") + " → 3개 만들 것"); }],
+    [4000, function(){
+      setNode("n_sched","done"); setEdge("e_ctrl_sched","done"); setEdge("e_sched_api","active");
+      logTo("live6", C.c("④ 배치 담당") + " 컴퓨터1 ← 1개, 컴퓨터2 ← 2개"); }],
+    [4900, function(){
+      setEdge("e_sched_api","done");
+      setEdge("e_api_k1","active"); setEdge("e_api_k2","active");
+      setNode("n_kube1","active"); setNode("n_kube2","active");
+      setEdge("e_reg_k","active");
+      logTo("live6", C.c("⑤ 컴퓨터 관리자") + " 이미지 내려받는 중 shop:1.4"); }],
+    [5700, function(){
+      showPod("n_p1","pending",0); showPod("n_p4","pending",150); showPod("n_p5","pending",300); }],
+    [6900, function(){
+      setNode("n_kube1","done"); setNode("n_kube2","done");
+      setEdge("e_api_k1","done"); setEdge("e_api_k2","done"); setEdge("e_reg_k","done");
+      setNode("n_p1","done"); setNode("n_p4","done"); setNode("n_p5","done");
+      logTo("live6", C.g("Running") + "  앱 한 벌 3/3 — 선언한 상태에 도달"); }],
+    [9200, function(){ seq6(); }]
+  ];
+  if(RM){ S.forEach(function(p){ if(p[0] < 9000) p[1](); }); return; }
+  S.forEach(function(p){ delay(p[1], p[0]); });
+}
+
+/* 7 ─ 조정 루프 */
+function podOn(id, st){ setNode(id, st); setPos(id, 0, 1, "none"); }
+function base7(){
+  stopAll();
+  var n2 = $("r_n2"); if(n2) n2.classList.remove("dim");
+  PODS.forEach(function(id){ setNode(id,"idle"); });
+  ["n_api","n_etcd","n_ctrl","n_sched","n_kube1","n_kube2","n_reg"].forEach(function(id){ setNode(id,"done"); });
+  setNode("n_ctrl","active");
+  ["e_api_etcd","e_etcd_ctrl","e_ctrl_api","e_api_k1","e_api_k2"].forEach(function(id){ setEdge(id,"done"); });
+  PODS.forEach(function(id){ setPos(id,0,0,"none"); });
+  podOn("n_p1","done"); podOn("n_p4","done"); podOn("n_p5","done");
+  var t = $("p7tab");
+  if(t) t.innerHTML =
+    "원하는 상태(장부)   shop 앱 한 벌 " + C.w("3") + "\n" +
+    "실제 상태           shop 앱 한 벌 " + C.g("3") + "\n" +
+    C.c("------------------------------------") + "\n" +
+    "차이                " + C.g("없음 — 할 일 없음");
+  clearLog("p7log");
+  logTo("p7log", C.c("0.3초마다 장부와 실제를 비교하는 중…"));
+}
+STEPS.push({
+  nav:"스스로 복구",
+  kicker:"5단계 · 조정 루프",
+  title:"비교기는 한 번 일하고 끝나지 않는다. 차이가 생기면 그때마다 다시 메운다",
+  desc:"<p>앞 단계의 흐름은 <b>한 번 실행되고 끝나는 절차가 아닙니다</b>. 비교기는 0.1~0.3초 간격으로 "+
+       "<em>장부의 3</em>과 <em>실제의 3</em>을 계속 맞춰 보는 무한 루프입니다. 같으면 아무 일도 하지 않습니다.</p>"+
+       "<p>그래서 컨테이너가 죽든, 컴퓨터가 통째로 꺼지든, 누가 손으로 하나 지우든 <b>대응 방법이 전부 같습니다</b>. "+
+       "\"실제가 3보다 적다\" → \"부족한 만큼 만들어라\". 장애 종류별 처리 절차가 따로 없습니다.</p>"+
+       "<p class='q'>작업용 컴퓨터 2를 통째로 내려보세요. 앱 한 벌 두 개가 사라집니다.</p>",
+  graph:{ focus:["r_ctl","r_n1","r_n2"] },
+  panesTwo:false,
+  panels:
+    "<div class='pane plain'><h4>비교기가 보는 것<span>desired vs actual</span></h4><pre id='p7tab'></pre></div>" +
+    pane("클러스터 사건 기록", "events", "", false, "p7log"),
+  terms:[
+    {ko:"조정 루프", en:"reconciliation loop", def:"\"원하는 상태와 실제 상태의 차이를 줄이는 동작\"을 <b>끝없이 반복</b>하는 구조. 쿠버네티스의 거의 모든 기능이 이 한 가지 모양으로 만들어져 있습니다."},
+    {ko:"개수 관리자", en:"ReplicaSet", def:"배포 선언이 만들어 내는 실무 담당. 오직 <b>\"이 모양의 앱 한 벌을 N개로 유지\"</b>만 책임집니다. 버전 교체는 이 담당을 새로 하나 더 만들어 처리합니다(9단계)."},
+    {ko:"사건", en:"event", def:"클러스터가 남기는 짧은 기록(<code>Killing</code>, <code>Scheduled</code>, <code>Pulled</code>). 무언가 안 뜰 때 가장 먼저 보는 곳입니다."}
+  ],
+  enter:function(){ base7(); },
+  demo:{ label:"작업용 컴퓨터 2의 전원 내리기", labelOn:"컴퓨터 2 다시 켜기",
+    hint:"사라진 두 벌이 어디에 다시 생기는지, 그 판단을 누가 했는지 보세요.",
+    run:function(on){
+      if(!on){ base7(); return {t:"원래 상태로 돌렸습니다. 다시 눌러 보면 <b>같은 절차</b>가 반복됩니다 — 장애 종류와 무관하게 대응이 하나이기 때문입니다.", tone:""}; }
+      stopAll(); clearLog("p7log");
+      setNode("n_kube2","err"); $("r_n2").classList.add("dim");
+      setNode("n_p4","err"); setNode("n_p5","err");
+      logTo("p7log", C.b("NodeNotReady") + "  컴퓨터2 응답 없음 (40s 무응답)");
+      delay(function(){
+        setPos("n_p4", 46, 0, T_OUT); setPos("n_p5", 46, 0, T_OUT);
+        logTo("p7log", C.b("Killing") + "  앱 한 벌 2개 소실");
+        var t=$("p7tab");
+        if(t) t.innerHTML =
+          "원하는 상태(장부)   shop 앱 한 벌 " + C.w("3") + "\n" +
+          hl("bad","실제 상태           shop 앱 한 벌 " + C.b("1")) + "\n" +
+          C.c("------------------------------------") + "\n" +
+          hl("bad","차이                " + C.b("2개 부족 → 만들어라"));
+      }, 700);
+      delay(function(){
+        setNode("n_ctrl","active");
+        logTo("p7log", C.c("비교기") + " 차이 감지 → 2개 생성 등록");
+        setEdge("e_ctrl_sched","active"); setNode("n_sched","active");
+      }, 1700);
+      delay(function(){
+        setNode("n_sched","done"); setEdge("e_ctrl_sched","done");
+        logTo("p7log", C.c("배치 담당") + " 남은 컴퓨터1로 2개 배정");
+        setNode("n_kube1","active"); setEdge("e_api_k1","active");
+        showPod("n_p2","pending",0); showPod("n_p3","pending",170);
+      }, 2600);
+      delay(function(){
+        setNode("n_p2","done"); setNode("n_p3","done");
+        setNode("n_kube1","done"); setEdge("e_api_k1","done"); setNode("n_ctrl","active");
+        logTo("p7log", C.g("Running") + "  앱 한 벌 3/3 — 자동 복구 완료 (약 45초)");
+        var t=$("p7tab");
+        if(t) t.innerHTML =
+          "원하는 상태(장부)   shop 앱 한 벌 " + C.w("3") + "\n" +
+          hl("ok","실제 상태           shop 앱 한 벌 " + C.g("3") + "  " + C.c("(전부 컴퓨터1)")) + "\n" +
+          C.c("------------------------------------") + "\n" +
+          "차이                " + C.g("없음 — 다시 할 일 없음");
+      }, 4200);
+      return {t:"사람은 아무것도 하지 않았습니다. <b>장부의 3과 실제의 1이 달랐고</b>, 그 차이 하나가 재배치까지 전부를 끌고 갔습니다.", tone:"good"};
+    }}
+});
+
+/* 8 ─ 고정 주소 */
+function base8(){
+  stopAll();
+  ["n_api","n_etcd","n_ctrl","n_kube1","n_kube2"].forEach(function(id){ setNode(id,"done"); });
+  setNode("n_user","active"); setNode("n_svc","active");
+  ["e_user_svc","e_svc_n1","e_svc_n2"].forEach(function(id){ setEdge(id,"active"); });
+  PODS.forEach(function(id){ setPos(id,0,0,"none"); });
+  podOn("n_p1","done"); podOn("n_p4","done"); podOn("n_p5","done");
+  render8(false);
+}
+STEPS.push({
+  nav:"고정 주소",
+  kicker:"6단계 · Service",
+  title:"앱 한 벌의 주소는 매번 바뀐다. 그래서 바뀌지 않는 주소를 앞에 하나 세운다",
+  desc:"<p>7단계에서 확인한 자동 복구에는 대가가 있습니다. 새로 생긴 앱 한 벌은 <b class='no'>이전과 다른 IP</b>를 받습니다. "+
+       "앞에서 호출하는 쪽이 IP를 알고 있었다면 그 순간 끊깁니다.</p>"+
+       "<p>그래서 <em>고정 주소</em>를 하나 세웁니다. 이 주소는 특정 컴퓨터를 가리키지 않고, "+
+       "<b>\"라벨이 app=shop인 앱 한 벌 전부\"</b>라는 조건을 가리킵니다. 한 벌이 생기고 사라질 때마다 "+
+       "뒤에 달린 실제 주소 목록이 자동으로 갱신되고, 들어온 요청은 살아 있는 것 중 하나로 넘어갑니다.</p>"+
+       "<p class='q'>앱 한 벌 하나를 교체해 보세요. 두 호출 방식이 어떻게 갈리는지 보세요.</p>",
+  graph:{ focus:["r_n1","r_n2","r_net"] },
+  panesTwo:true,
+  panels:
+    "<div class='pane'><h4>IP를 직접 적어 호출<span>10.1.2.x</span></h4><pre id='p8a'></pre></div>" +
+    "<div class='pane'><h4>고정 주소로 호출<span>shop:80</span></h4><pre id='p8b'></pre></div>",
+  terms:[
+    {ko:"고정 주소", en:"Service · ClusterIP", def:"클러스터 안에서 <b>변하지 않는 IP와 이름</b>을 하나 만들어 주는 것. 이름(<code>shop</code>)으로 부르면 클러스터 DNS가 그 고정 IP로 바꿔 줍니다."},
+    {ko:"라벨 조건", en:"selector", def:"고정 주소가 <b>누구에게 보낼지 고르는 기준</b>. 앱 한 벌에 붙은 <code>app=shop</code> 같은 꼬리표를 보고 자동으로 대상에 넣습니다. 개수나 IP를 사람이 적지 않는 이유입니다."},
+    {ko:"실제 주소 목록", en:"Endpoints", def:"라벨 조건에 맞으면서 <b>지금 요청 받을 준비가 된</b> 앱 한 벌들의 IP 목록. 한 벌이 죽거나 뜰 때마다 클러스터가 알아서 고쳐 씁니다."}
+  ],
+  enter:function(){ base8(); },
+  demo:{ label:"앱 한 벌 하나를 교체하기 (IP가 바뀜)", labelOn:"교체 전으로 되돌리기",
+    hint:"왼쪽은 무엇을 보고 호출했고, 오른쪽은 무엇을 보고 호출했는지 비교하세요.",
+    run:function(on){
+      if(!on){ base8(); return {t:"교체 전 상태입니다. 양쪽 모두 정상 응답 중입니다.", tone:""}; }
+      stopAll();
+      setNode("n_p4","err");
+      delay(function(){
+        setPos("n_p4", 46, 0, T_OUT);
+        showPod("n_p6","pending",200);
+        delay(function(){ setNode("n_p6","done"); render8(true); }, 900);
+      }, 500);
+      render8(true);
+      return {t:"같은 교체인데 <b>왼쪽만 끊겼습니다</b>. 왼쪽은 사라질 수 있는 것(IP)을 붙잡고 있었고, 오른쪽은 조건(라벨)을 붙잡고 있었습니다.", tone:"bad"};
+    }}
+});
+function render8(on){
+  var a=$("p8a"), b=$("p8b"); if(!a||!b) return;
+  a.innerHTML =
+    "$ curl http://10.1.2.47:8080/items\n" +
+    (on ? hl("bad", C.b("curl: (7) Failed to connect")) + "\n" + C.c("그 한 벌은 방금 사라졌고 새 벌은 10.1.2.91")
+        : hl("ok", C.g("200 OK") + "  {\"items\":[…]}")) + "\n\n" +
+    C.c("호출하는 쪽이 IP를 알고 있어야 함") + "\n" +
+    C.c("→ 한 벌이 바뀔 때마다 고쳐야 함");
+  b.innerHTML =
+    "$ curl http://shop/items\n" +
+    hl("ok", C.g("200 OK") + "  {\"items\":[…]}") + "\n\n" +
+    "실제 주소 목록(자동 갱신)\n" +
+    "  10.1.1.12  " + C.g("ready") + "\n" +
+    (on ? hl("mut","  10.1.2.47  " + C.c("제거됨")) + "\n" + hl("ok","  10.1.2.91  " + C.g("ready") + "  " + C.c("← 새 벌 자동 등록"))
+        : "  10.1.2.47  " + C.g("ready") + "\n  10.1.2.58  " + C.g("ready"));
+}
+
+/* 9 ─ 무중단 교체 */
+function base9(){
+  ["n_api","n_etcd","n_ctrl","n_kube1","n_kube2","n_svc","n_user"].forEach(function(id){ setNode(id,"done"); });
+  ["e_user_svc","e_svc_n1","e_svc_n2"].forEach(function(id){ setEdge(id,"done"); });
+  PODS.forEach(function(id){ setPos(id,0,0,"none"); setVer(id,"v1"); });
+  podOn("n_p1","done"); podOn("n_p4","done"); podOn("n_p5","done");
+}
+var ROLL = [["n_p2","n_p1"],["n_p3","n_p4"],["n_p6","n_p5"]];
+function rollLoop(i){
+  if(i === undefined){ stopAll(); base9(); clearLog("p9log"); render9res("ok"); i = 0;
+    logTo("p9log", "$ kubectl set image deploy/shop shop=shop:2.0"); }
+  if(i >= ROLL.length){
+    delay(function(){ rollLoop(); }, 2200);
+    delay(function(){ logTo("p9log", C.g("deployment \"shop\" successfully rolled out") + "  " + C.c("무중단 전환 완료")); }, 300);
+    return;
+  }
+  var pair = ROLL[i], nw = pair[0], od = pair[1];
+  delay(function(){
+    setVer(nw,"v2"); showPod(nw,"pending",0);
+    logTo("p9log", C.c("+ 새 벌 기동") + "  shop:2.0  " + C.w("준비 확인 중"));
+  }, 0);
+  delay(function(){
+    setNode(nw,"done");
+    logTo("p9log", "  준비 확인 " + C.g("통과") + " → 고정 주소 목록에 추가");
+  }, 1100);
+  delay(function(){
+    setNode(od,"warn");
+    logTo("p9log", C.c("- 옛 벌 정리") + "  주소 목록에서 먼저 제외 후 종료");
+  }, 1700);
+  delay(function(){ setPos(od, 46, 0, T_OUT); }, 2100);
+  delay(function(){ rollLoop(i+1); }, 2900);
+}
+function render9res(mode){
+  var el = $("p9res"); if(!el) return;
+  el.innerHTML = mode === "ok"
+    ? "교체 중 응답 상태\n" +
+      hl("ok","  200 OK   " + C.g("1,240건")) + "\n" +
+      hl("ok","  5xx      " + C.g("0건")) + "\n\n" +
+      "동시 가용 벌 수   " + C.g("항상 3 이상") + "\n" +
+      C.c("새 벌이 준비된 뒤에야 옛 벌을 내림")
+    : "교체 중 응답 상태\n" +
+      hl("bad","  200 OK   " + C.b("812건")) + "\n" +
+      hl("bad","  5xx      " + C.b("428건") + "  " + C.c("약 11초간")) + "\n\n" +
+      "동시 가용 벌 수   " + C.b("한때 0") + "\n" +
+      C.c("전부 내린 뒤에 새 벌을 올리기 시작함");
+}
+STEPS.push({
+  nav:"무중단 교체",
+  kicker:"7단계 · 롤링 업데이트",
+  title:"버전 교체도 같은 원리다. 장부의 \"원하는 모양\"을 바꾸면 루프가 천천히 따라온다",
+  desc:"<p>새 버전 배포는 특별한 기능이 아니라 <b>선언서의 이미지 한 줄을 고치는 일</b>입니다. "+
+       "원하는 모양이 달라졌으니 비교기가 다시 차이를 메우기 시작합니다.</p>"+
+       "<p>다만 한꺼번에 바꾸지 않습니다. <em>새 벌 하나를 띄우고 → 요청 받을 준비가 됐는지 확인하고 → "+
+       "고정 주소 목록에 넣고 → 그제서야 옛 벌 하나를 목록에서 빼고 내립니다.</em> 이걸 개수만큼 반복합니다.</p>"+
+       "<p>준비 확인이 핵심입니다. 이게 없으면 <b class='no'>아직 뜨지도 않은 벌에 요청이 들어갑니다</b>. "+
+       "그리고 문제가 보이면 장부의 이전 모양으로 되돌리는 것만으로 롤백이 됩니다.</p>",
+  graph:{ focus:["r_n1","r_n2","r_net"] },
+  panesTwo:false,
+  panels:
+    pane("교체 진행", "kubectl rollout status", "", false, "p9log") +
+    "<div class='pane plain'><h4>사용자가 겪은 것<span>측정</span></h4><pre id='p9res'></pre></div>",
+  terms:[
+    {ko:"점진 교체", en:"rolling update", def:"한 번에 전부가 아니라 <b>조금씩 겹쳐 가며</b> 옛 벌을 새 벌로 바꾸는 방식. 한 번에 몇 개까지 더 띄울지(maxSurge)와 몇 개까지 빠져도 되는지(maxUnavailable)로 속도를 조절합니다."},
+    {ko:"준비 확인", en:"readiness probe", def:"\"이 벌이 지금 요청을 받아도 되는가\"를 주기적으로 묻는 검사(<code>GET /healthz</code>). <b>통과해야만 고정 주소 목록에 들어갑니다.</b>"},
+    {ko:"되돌리기", en:"rollback", def:"<code>kubectl rollout undo</code>. 이전 모양을 담은 개수 관리자가 남아 있어서, 원하는 모양을 되돌리면 같은 루프가 <b>거꾸로 같은 일</b>을 합니다."}
+  ],
+  enter:function(){ rollLoop(); },
+  demo:{ auto:true, label:"한 번에 전부 교체해보기 (maxUnavailable 100%)", labelOn:"점진 교체로 되돌리기",
+    hint:"교체 도중 살아 있는 벌이 몇 개인지, 5xx가 나는지 보세요.",
+    run:function(on){
+      if(!on){ rollLoop(); return {t:"점진 교체를 다시 재생합니다. 새 벌이 <b>준비 확인을 통과한 뒤에야</b> 옛 벌이 내려갑니다.", tone:""}; }
+      stopAll(); base9(); clearLog("p9log");
+      logTo("p9log", "$ kubectl set image deploy/shop shop=shop:2.0");
+      ["n_p1","n_p4","n_p5"].forEach(function(id){ setNode(id,"err"); });
+      delay(function(){
+        ["n_p1","n_p4","n_p5"].forEach(function(id){ setPos(id,46,0,T_OUT); });
+        logTo("p9log", C.b("- 옛 벌 3개 동시 종료"));
+        logTo("p9log", C.b("가용 벌 0 — 들어오는 요청 전부 실패"));
+        render9res("bad");
+      }, 500);
+      delay(function(){
+        logTo("p9log", C.c("+ 새 벌 3개 기동  이미지 내려받는 중…"));
+        ["n_p2","n_p3","n_p6"].forEach(function(id,k){ setVer(id,"v2"); showPod(id,"pending",k*150); });
+      }, 1800);
+      delay(function(){
+        ["n_p2","n_p3","n_p6"].forEach(function(id){ setNode(id,"done"); });
+        logTo("p9log", C.g("Running") + " 3/3 — 복구까지 " + C.b("11초간 전면 장애"));
+      }, 3600);
+      return {t:"같은 선언서, 같은 루프인데 <b>11초 동안 서비스가 완전히 멈췄습니다</b>. 무중단은 쿠버네티스가 공짜로 주는 게 아니라 겹쳐 가는 규칙과 준비 확인이 만들어 내는 결과입니다.", tone:"bad"};
+    }}
+});
+
+/* ── 엔진 ───────────────────────────────────── */
+function resetGraph(){
+  NODES.forEach(function(id){ setNode(id,"idle"); });
+  EDGES.forEach(function(id){ setEdge(id,"off"); });
+  PODS.forEach(function(id){ setVer(id,"v1"); setPos(id, 0, 0, "none"); });
+  REGS.forEach(function(id){ var el=$(id); if(el) el.classList.remove("dim"); });
+  reflow();
+}
+function applyGraph(g){
+  g = g || {};
+  if(g.focus && g.focus.length){
+    REGS.forEach(function(id){
+      var el=$(id); if(el) el.classList.toggle("dim", g.focus.indexOf(id) === -1);
+    });
+  }
+  if(g.n) for(var k in g.n) if(g.n.hasOwnProperty(k)) setNode(k, g.n[k]);
+  if(g.e) for(var j in g.e) if(g.e.hasOwnProperty(j)) setEdge(j, g.e[j]);
+  if(g.pods) for(var p in g.pods) if(g.pods.hasOwnProperty(p)) podOn(p, g.pods[p]);
+}
+function renderTerms(s){
+  var host = $("termsHost");
+  if(!s.terms || !s.terms.length){ host.innerHTML = ""; return; }
+  var h = "<details class='terms'><summary>이 단계에서 처음 나온 말 " + s.terms.length + "개</summary><div class='body'><dl>";
+  s.terms.forEach(function(t){
+    h += "<dt>" + t.ko + "<span>" + (t.en||"") + "</span></dt><dd>" + t.def + "</dd>";
+  });
+  host.innerHTML = h + "</dl></div></details>";
+}
+var demoOn = false;
+function renderDemo(s){
+  var bar=$("demobar"), btn=$("demoBtn"), hint=$("demoHint"), v=$("verdict");
+  if(!s.demo){ bar.classList.add("empty"); return; }
+  bar.classList.remove("empty");
+  demoOn = false;
+  btn.textContent = s.demo.label;
+  btn.classList.remove("on");
+  btn.setAttribute("aria-pressed", "false");
+  hint.textContent = s.demo.hint || "";
+  v.className = "verdict";
+  v.innerHTML = "<span style='color:var(--ink2)'>버튼을 눌러 보세요.</span>";
+  btn.onclick = function(){
+    demoOn = !demoOn;
+    btn.textContent = demoOn ? (s.demo.labelOn || "되돌리기") : s.demo.label;
+    btn.classList.toggle("on", demoOn);
+    btn.setAttribute("aria-pressed", demoOn ? "true" : "false");
+    var r = s.demo.run(demoOn);
+    if(r){
+      v.className = "verdict" + (r.tone ? " " + r.tone : "");
+      v.innerHTML = r.t;
+    }
+  };
+}
+var cur = -1, seen = {};
+function renderRail(){
+  var h = "";
+  STEPS.forEach(function(s,i){
+    h += "<button type='button' data-i='" + i + "' class='" +
+         (i===cur?"on":(seen[i]?"seen":"")) + "'><span class='no'>" + (i+1) + "</span>" + s.nav + "</button>";
+  });
+  $("rail").innerHTML = h;
+  Array.prototype.forEach.call($("rail").querySelectorAll("button"), function(b){
+    b.onclick = function(){ go(parseInt(b.getAttribute("data-i"),10)); };
+  });
+}
+function go(n){
+  n = Math.max(0, Math.min(STEPS.length-1, n));
+  cur = n; seen[n] = true;
+  var s = STEPS[n];
+  stopAll();
+  resetGraph();
+  $("kicker").textContent = s.kicker;
+  $("title").textContent  = s.title;
+  $("desc").innerHTML     = s.desc;
+  var panes = $("panes");
+  panes.className = "panes" + (s.panesTwo ? " two" : "");
+  panes.innerHTML = s.panels || "";
+  renderTerms(s);
+  applyGraph(s.graph);
+  applyView(s);
+  renderDemo(s);
+  renderRail();
+  $("count").textContent = (n+1) + " / " + STEPS.length;
+  $("prev").disabled = (n === 0);
+  $("next").disabled = (n === STEPS.length-1);
+  if(s.enter) s.enter();
+}
+$("viewBtn").onclick = function(){
+  fullView = !fullView;
+  $("viewBtn").textContent = fullView ? "단계 구역만 보기" : "전체 보기";
+  $("viewBtn").setAttribute("aria-pressed", fullView ? "true" : "false");
+  applyView(STEPS[cur]);
+};
+$("prev").onclick = function(){ go(cur-1); };
+$("next").onclick = function(){ go(cur+1); };
+document.addEventListener("keydown", function(e){
+  if(e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+  if(e.key === "ArrowLeft"){ go(cur-1); }
+  else if(e.key === "ArrowRight"){ go(cur+1); }
+});
+$("themeBtn").onclick = function(){
+  var r = document.documentElement, t = r.getAttribute("data-theme");
+  r.setAttribute("data-theme", t === "dark" ? "light" : "dark");
+};
+go(0);
+})();
+</script>
+</body>
+</html>
