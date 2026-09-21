@@ -607,19 +607,25 @@ STEPS.push({
     {ko:"빌드 캐시", en:"build cache", def:"이전에 구운 층을 재사용하는 것. <b>바뀐 줄 아래의 층은 모두 무효</b>가 되므로, 설명서 줄 순서를 바꾸는 것만으로 빌드 시간이 크게 달라집니다."},
     {ko:"바탕 이미지", en:"base image", def:"맨 아래에 까는 남이 만들어 둔 이미지(<code>python:3.11-slim</code>). 운영체제 파일과 런타임이 이미 들어 있어서, 내가 굽는 것은 그 위 두세 층뿐입니다."}
   ],
-  enter:function(){ render2(false); },
+  enter:function(){ base2(); },
   demo:{ label:"의존성 목록(requirements.txt)도 고쳐보기", labelOn:"앱 코드만 고친 상태로 되돌리기",
     hint:"CACHED 표시가 몇 줄 남는지, 총 시간이 어떻게 바뀌는지 보세요.",
     run:function(on){
-      render2(on);
-      setNode("n_l1","done");
-      setNode("n_l2", on?"warn":"done");
-      setNode("n_l3", on?"warn":"active");
+      if(!on){ base2(); }
+      else {
+        render2(true);
+        setNode("n_l1","done"); setNode("n_l2","warn"); setNode("n_l3","warn");
+      }
       return on
         ? {t:"의존성 목록이 바뀌자 <b>그 아래 층까지 전부 다시 구워졌습니다</b> — 32.8초. 라이브러리 설치는 매번 가장 비싼 줄입니다.", tone:"bad"}
         : {t:"앱 코드만 바뀌면 설치 결과 층은 <b>그대로 재사용</b>되어 1.2초에 끝납니다. 같은 설명서인데 고친 줄의 위치가 27배 차이를 만듭니다.", tone:"good"};
     }}
 });
+/* 이 단계의 기준 상태 — 진입도 되돌리기도 여기를 거친다 */
+function base2(){
+  render2(false);
+  setNode("n_l1","done"); setNode("n_l2","done"); setNode("n_l3","active");
+}
 function render2(on){
   var el = $("p2log"); if(!el) return;
   el.innerHTML = on
@@ -713,17 +719,18 @@ STEPS.push({
     {ko:"볼륨", en:"volume", def:"컨테이너 바깥에 따로 두는 저장 공간을 컨테이너 안 경로에 이어 붙인 것. <b>컨테이너 수명과 분리</b>되므로 지웠다 다시 만들어도 내용이 남습니다."},
     {ko:"1번 프로세스", en:"PID 1", def:"컨테이너 안에서 보면 내 앱이 <b>1번 프로세스</b>입니다. 바깥 컴퓨터에서 보면 수천 번대 일반 프로세스일 뿐이고, 번호가 달라 보이는 것이 격리(namespace)가 일하는 증거입니다."}
   ],
-  enter:function(){ render4(false); },
+  enter:function(){ base4(); },
   demo:{ label:"컨테이너를 지우고 같은 이미지로 다시 만들기", labelOn:"지우기 전 상태로 되돌리기",
     hint:"두 칸 모두에 같은 일을 겁니다. 주문 데이터가 어느 쪽에 남는지 보세요.",
     run:function(on){
-      render4(on);
-      setNode("n_ctr", on?"warn":"active");
+      if(!on){ base4(); }
+      else { render4(true); setNode("n_ctr","warn"); }
       return on
         ? {t:"같은 이미지로 똑같이 되살아났지만, 왼쪽의 <b>주문 데이터 1,284건은 쓰기 칸과 함께 사라졌습니다</b>. 오른쪽은 볼륨에 있었으므로 그대로입니다.", tone:"bad"}
         : {t:"양쪽 모두 정상 실행 중이고 데이터도 있습니다. 버튼을 눌러 컨테이너를 지워보세요.", tone:""};
     }}
 });
+function base4(){ render4(false); setNode("n_ctr","active"); }
 function render4(on){
   var a=$("p4a"), b=$("p4b"); if(!a||!b) return;
   var head = "$ docker run -d shop:1.4\n" + C.c("# 컨테이너 안에서 본 프로세스") + "\nPID 1  python main.py\n\n";
@@ -764,17 +771,18 @@ STEPS.push({
     {ko:"선언형", en:"declarative", def:"절차를 시키는 대신 원하는 상태를 적어 내는 방식. 같은 선언서를 <b>몇 번 내도 결과가 같고</b>, 현재 상태가 어떻든 그 상태로 수렴시킵니다."},
     {ko:"오케스트레이터", en:"orchestrator", def:"여러 컴퓨터에 흩어진 컨테이너들을 <b>원하는 상태에 맞춰 배치·재기동·교체</b>하는 관리자. 쿠버네티스가 그중 하나입니다."}
   ],
-  enter:function(){ live5(false); },
+  enter:function(){ base5(); },
   demo:{ label:"컨테이너 프로세스 죽이기 (메모리 초과)", labelOn:"사람이 다시 띄우기",
     hint:"로그가 계속 흐르는지, 그리고 누가 이 상황을 되돌리는지 보세요.",
     run:function(on){
-      live5(on);
-      setNode("n_ctr", on?"err":"done");
+      if(!on){ base5(); }
+      else { live5(true); setNode("n_ctr","err"); }
       return on
         ? {t:"요청이 전부 실패하고 있고, <b>아무도 다시 띄우지 않습니다</b>. 되돌리려면 사람이 버튼을 눌러야 합니다 — 그게 지금 이 버튼입니다.", tone:"bad"}
         : {t:"사람이 손으로 되살렸습니다. 다음 단계부터는 이 일을 대신할 쪽에 <b>원하는 상태를 적어 냅니다</b>.", tone:""};
     }}
 });
+function base5(){ live5(false); setNode("n_ctr","done"); }
 function live5(dead){
   stopAll();
   var job = $("p5job");
@@ -822,7 +830,7 @@ STEPS.push({
     pane("클러스터에서 벌어지는 일", "kubectl get events -w", "", false, "live6"),
   terms:[
     {ko:"앱 한 벌", en:"Pod", def:"쿠버네티스가 다루는 <b>가장 작은 실행 단위</b>. 보통 컨테이너 하나지만, 붙어 다녀야 하는 보조 컨테이너가 있으면 같이 묶입니다. 한 벌 안의 컨테이너들은 IP와 저장 공간을 공유합니다."},
-    {ko:"배포 선언", en:"Deployment", def:"\"이 이미지로 만든 앱 한 벌이 항상 N개 있어야 한다\"를 적는 문서. 개수 유지와 <b>버전 교체 방식</b>까지 여기에 적습니다."},
+    {ko:"접수 창구", en:"API server", def:"클러스터에 들어오는 <b>모든 요청이 반드시 지나는 단 하나의 입구</b>. 형식과 권한을 검사해 통과한 것만 장부에 적습니다. 다른 부품들은 서로 직접 부르지 않고 이 창구를 통해서만 장부를 읽고 씁니다."},
     {ko:"장부", en:"etcd", def:"클러스터의 <b>모든 상태를 담은 단 하나의 저장소</b>. 원하는 상태도, 지금 실제 상태도 전부 여기 있습니다. 장부를 잃으면 클러스터 기억이 통째로 사라집니다."},
     {ko:"컴퓨터 관리자", en:"kubelet", def:"작업용 컴퓨터마다 하나씩 도는 프로그램. 장부에서 <b>자기 컴퓨터에 배정된 몫</b>만 보고, 이미지를 내려받아 컨테이너를 띄우고 상태를 다시 보고합니다."}
   ],
