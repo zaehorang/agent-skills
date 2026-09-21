@@ -1,0 +1,3 @@
+interface:
+  display_name: "Presentation Harness"
+  short_description: "Plan, build, verify, export, and script HTML presentation decks"
