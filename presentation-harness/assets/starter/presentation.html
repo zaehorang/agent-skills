@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>발표 제목</title>
+  <style>
+    /* ── 색 토큰 ──────────────────────────────────────────────
+       레드는 "이번 제안이 새로 만드는 것"에만 쓴다.
+       중립 회색은 이미 있는 것, 연회색 점선은 아직 아닌 것. */
+    :root{
+      --ink:#202020; --muted:#707070; --paper:#f7f7f7; --line:#dedede;
+      --gray:#888888; --gray-soft:#ededed; --pending:#bbbbbb;
+      --red:#e32626; --red-dark:#bb1717; --red-soft:#fff0f0;
+      --shadow:0 14px 34px rgba(32,32,32,.08);
+
+      /* 타이포 스케일 — 1280x720 고정 캔버스 기준 절대값.
+         괄호 안은 슬라이드 높이(720) 대비 비율. 발표 가독성은 화면 해상도가
+         아니라 이 비율이 결정한다. 절대 하한 2.0%(=14.4px) 아래로 내리지 않는다.
+         캔버스가 고정이므로 어떤 화면에서도 줄바꿈까지 동일하다. */
+      --fs-h1:    72px;   /* 10.0% */
+      --fs-h2:    50px;   /*  6.9% */
+      --fs-h3:    25px;   /*  3.5% */
+      --fs-lead:  24px;   /*  3.3% */
+      --fs-body:  20px;   /*  2.8% */
+      --fs-label: 16px;   /*  2.2% */
+
+      --canvas-w: 1280px;
+      --canvas-h: 720px;
+      --pad:      54px;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%;background:#000;color:var(--ink);font-family:Pretendard,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;overflow:hidden}
+    button{font:inherit}
+
+    /* ── 무대: 화면을 채우고 캔버스를 가운데 둔다. 남는 부분은 검정 레터박스 ── */
+    .stage{position:fixed;inset:0;display:grid;place-items:center;background:#000;overflow:hidden}
+
+    /* ── 고정 캔버스 ──────────────────────────────────────
+       1280x720에 절대 px로 그리고, 화면 크기에 맞춰 통째로 scale한다.
+       PowerPoint·Keynote와 같은 방식. 해상도가 달라도 줄바꿈이 변하지 않는다. */
+    .deck{width:var(--canvas-w);height:var(--canvas-h);position:relative;flex:none;transform-origin:center center}
+    .slide{position:absolute;inset:0;display:grid;grid-template-rows:auto 1fr auto;gap:16px;
+           padding:var(--pad);background:var(--paper);opacity:0;pointer-events:none;
+           transform:translateX(5%);transition:.42s ease;overflow:hidden}
+    .slide.active{opacity:1;pointer-events:auto;transform:none}
+    .slide.past{transform:translateX(-5%)}
+    .slide.dark{background:#141414;color:#fff}
+    /* 배경 사진을 쓸 때만: 표지 슬라이드에 클래스를 하나 더 붙이고 background:linear-gradient(135deg,rgba(14,14,14,.92),rgba(30,30,30,.89)),url("assets/COVER.png") center/cover; } */
+    .slide:not(.dark)::before{content:"";position:absolute;top:0;left:var(--pad);width:54px;height:6px;background:var(--red)}
+    .slide-head,.content,.foot{position:relative;z-index:1}
+    .slide-head{display:flex;justify-content:space-between;gap:24px;align-items:flex-start}
+    .content{min-height:0;display:flex;align-items:center}
+
+    /* ── 타이포 ──────────────────────────────────────────── */
+    h1,h2,h3,p{margin-top:0}
+    h1,h2,h3{word-break:keep-all;overflow-wrap:normal;text-wrap:balance}
+    h1{font-size:var(--fs-h1);line-height:1.06;letter-spacing:-.06em;margin-bottom:.28em}
+    h2{font-size:var(--fs-h2);line-height:1.15;letter-spacing:-.055em;margin-bottom:0;max-width:20em}
+    h3{font-size:var(--fs-h3);line-height:1.22;letter-spacing:-.035em;margin-bottom:.32em}
+    p,li{font-size:var(--fs-body);line-height:1.5}
+    .kicker{margin:0 0 .7em;color:var(--red);font-size:var(--fs-label);font-weight:900;letter-spacing:.15em;text-transform:uppercase}
+    .dark .kicker{color:#ff6767}
+    .lead{font-size:var(--fs-lead);line-height:1.45;color:var(--muted);max-width:26em;word-break:keep-all}
+    .dark .lead{color:#e5e5e5}
+    .accent{color:var(--red)}
+    .final-line{font-size:var(--fs-lead);font-weight:900;color:var(--red-dark);word-break:keep-all}
+
+    /* ── 상태 배지: 오직 "구현 상태" 하나의 축에만 사용한다 ──
+       done  회색   = 현재 확인됨 (.service.confirmed 회색 보더와 짝)
+       plan  레드   = 도메인 전환안 (.service.proposed 레드 보더와 짝)
+       next  빈 원  = Sprint 3 · 백로그 (.service.backlog 점선과 짝) */
+    .badge{display:inline-flex;align-items:center;gap:.5em;border:1px solid var(--line);padding:.45em .8em;background:#fff;font-size:var(--fs-label);font-weight:800;white-space:nowrap}
+    .badge::before{content:"";width:.6em;height:.6em;border-radius:50%;background:var(--gray);flex:none}
+    .badge.plan::before{background:var(--red)}
+    .badge.next::before{background:#fff;border:2px solid var(--pending)}
+    .legend{display:flex;gap:14px;flex-wrap:wrap}
+    .legend .badge{background:transparent}
+
+    /* ── 1 표지 ─────────────────────────────────────────── */
+    .cover-content{width:100%;display:grid;grid-template-columns:1fr .86fr;gap:clamp(36px,5vw,86px);align-items:center}
+    .cover-copy{max-width:840px}
+    .cover-copy h1{max-width:780px}
+    .cover-copy .lead{color:#fff;font-weight:800;max-width:680px}
+    .bridge-question{margin:0;padding:.7em .9em;border-left:4px solid var(--red);background:rgba(255,255,255,.1);
+                     font-size:var(--fs-body);font-weight:850;color:#fff;max-width:22em;word-break:keep-all}
+    .cover-visual-wrap{position:relative;padding:0 14px 14px 0}
+    .cover-visual-wrap::after{content:"";position:absolute;right:0;bottom:0;width:56%;height:7px;background:var(--red)}
+    .cover-visual{width:100%;aspect-ratio:1.3;object-fit:cover;object-position:center;
+                  border:1px solid rgba(255,255,255,.22);box-shadow:0 24px 70px rgba(0,0,0,.3);filter:saturate(.72) contrast(1.06)}
+
+    /* ── 2 조직 맥락 ─────────────────────────────────────── */
+    .thesis-grid{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:22px}
+    .thesis-card{padding:1.1em 1.2em;border-radius:3px;background:#fff;border:1px solid var(--line)}
+    .thesis-card.fading{background:var(--gray-soft)}
+    .thesis-card.keeping{background:linear-gradient(135deg,var(--red-soft),#fff);border-color:#efb8b8}
+    .thesis-card ul{padding-left:22px;margin-bottom:0}
+    .trend{display:inline-block;padding:.4em .7em;border-radius:2px;background:#e4e4e4;color:var(--muted);font-size:var(--fs-label);font-weight:900}
+    .keeping .trend{background:#ffd9d9;color:var(--red-dark)}
+
+    /* ── 3 문제 ─────────────────────────────────────────── */
+    .split{width:100%;display:grid;grid-template-columns:1.1fr .9fr;gap:clamp(28px,5vw,90px);align-items:center}
+    .photo-card{position:relative;width:100%;height:400px;border-radius:3px;overflow:hidden;box-shadow:var(--shadow);background:#cdd8e1}
+    .photo-card img{width:100%;height:100%;object-fit:cover;filter:grayscale(1) contrast(1.06)}
+    .photo-overlay{position:absolute;inset:auto 0 0;padding:1em 1.1em;background:linear-gradient(transparent,rgba(18,18,18,.92));color:#fff}
+    .big-quote{font-size:var(--fs-h2);font-weight:900;line-height:1.08;letter-spacing:-.04em}
+    .speech{margin:.8em 0;padding:.7em .8em;border-radius:2px;background:var(--red-soft);border-left:4px solid var(--red);
+            font-weight:800;font-size:var(--fs-body);word-break:keep-all}
+
+    /* ── 4 이해관계자: 1순위 작성자를 크게, 나머지 4명은 위성 ── */
+    .impact-layout{width:100%;display:grid;grid-template-columns:1.25fr 1fr 1fr;grid-template-rows:1fr 1fr;gap:14px}
+    .impact-card{padding:.85em .95em;border-radius:3px;background:#fff;border:1px solid var(--line);
+                 display:flex;flex-direction:column;justify-content:space-between;gap:.6em;min-height:0}
+    .impact-card.primary{grid-row:1 / span 2;padding:1.2em;border:2px solid var(--red);background:linear-gradient(135deg,var(--red-soft),#fff)}
+    .impact-card .avatar{width:1.9em;height:1.9em;border-radius:50%;display:grid;place-items:center;background:var(--red-soft);font-size:var(--fs-h3)}
+    .impact-card.primary .avatar{font-size:calc(var(--fs-h3) * 1.2);background:#fff}
+    .impact-card.primary h3{font-size:calc(var(--fs-h3) * 1.25)}
+    .impact-card .before{color:var(--muted);font-weight:700;margin-bottom:0}
+    .impact-card .after{color:var(--red-dark);font-weight:900;margin-bottom:0}
+    .priority-note{margin:.7em 0 0;padding-top:.7em;border-top:2px solid var(--red);font-weight:850;color:var(--ink);word-break:keep-all}
+
+    /* ── 5 문제→기능 매트릭스: 가로 1회 + 세로 1회로 읽힌다 ── */
+    .matrix{width:100%;display:grid;gap:9px}
+    .matrix-caption{margin:0;font-size:var(--fs-label);font-weight:900;letter-spacing:.14em;color:var(--muted)}
+    .matrix-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+    .mcell{padding:.75em .8em;border-radius:3px;border:1px solid var(--line);font-size:var(--fs-body)}
+    .mcell .no{display:block;font-size:var(--fs-label);font-weight:900;color:var(--muted);margin-bottom:.3em}
+    .mcell strong{display:block;font-size:var(--fs-h3);letter-spacing:-.03em;margin-bottom:.25em}
+    .mcell p{margin:0;font-size:1em;color:var(--muted);word-break:keep-all;line-height:1.4}
+    .matrix-row.problems .mcell{background:var(--gray-soft);border-color:#dcdcdc}
+    .matrix-row.features .mcell{background:#fff}
+    .matrix-row.features .mcell p{color:var(--ink)}
+    .mcell.hot{border:2px solid var(--red);background:linear-gradient(135deg,var(--red-soft),#fff)}
+    .mcell.hot .no{color:var(--red-dark)}
+    .mcell .newly{display:inline-block;margin-top:.5em;padding:.25em .5em;background:var(--red);color:#fff;font-size:var(--fs-label);font-weight:900;letter-spacing:.06em}
+    .matrix-arrows{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;text-align:center;color:var(--pending);font-weight:900;font-size:var(--fs-h3)}
+    .matrix-outcome{margin:.3em 0 0;padding:.6em .8em;border-left:5px solid var(--red);background:var(--red-soft);
+                    font-size:var(--fs-lead);font-weight:900;word-break:keep-all}
+
+    /* ── 6 AI 큐레이션 ──────────────────────────────────── */
+    .ai-flow-grid{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:22px}
+    .flow-card{padding:1.1em 1.2em;border-radius:3px;background:#fff;border:1px solid var(--line)}
+    .flow-card .mode{display:block;color:var(--red-dark);font-size:var(--fs-label);font-weight:900;letter-spacing:.12em;margin-bottom:.4em}
+    .flow-steps{display:flex;flex-wrap:wrap;align-items:center;gap:.4em;margin-top:.9em}
+    .flow-steps span{padding:.4em .55em;border-radius:2px;background:#f0f0f0;font-size:var(--fs-label);font-weight:850}
+    .flow-steps span + span::before{content:"\2192";color:var(--red);font-weight:900;margin-right:.5em}
+
+    /* ── 7 사람의 판단: 역할 라벨은 상태 배지와 다른 토큰 ─── */
+    .before-after{width:100%;display:grid;grid-template-columns:1fr 90px 1fr;gap:20px;align-items:center}
+    .scene{padding:1.2em;border-radius:3px;background:#fff;border:1px solid var(--line);
+           display:flex;flex-direction:column;justify-content:space-between;gap:.8em}
+    .scene.ai{background:linear-gradient(135deg,var(--red-soft),#fff);border-color:#efb8b8}
+    .scene ul{padding-left:22px}
+    .arrow{font-size:var(--fs-h2);color:var(--pending);text-align:center}
+    .role-tag{display:inline-block;padding:.4em .8em;font-size:var(--fs-label);font-weight:900;letter-spacing:.1em;color:#fff}
+    .role-tag.ai{background:var(--red)}
+    .role-tag.human{background:var(--ink)}
+
+    /* ── 8 스프린트: 단계 라벨도 상태 배지와 분리 ────────── */
+    .roadmap{width:100%;display:grid;grid-template-columns:repeat(3,1fr);gap:20px;position:relative}
+    .roadmap::before{content:"";position:absolute;top:44px;left:10%;right:10%;height:2px;background:#d5d5d5;z-index:0}
+    .sprint{position:relative;z-index:1;padding-top:84px}
+    .station{position:absolute;top:18px;left:20px;width:1.7em;height:1.7em;border-radius:50%;display:grid;place-items:center;
+             background:var(--pending);color:#fff;font-weight:900;border:8px solid var(--paper);font-size:var(--fs-h3)}
+    .sprint:nth-child(1) .station{background:var(--gray)}
+    .sprint:nth-child(2) .station{background:var(--red)}
+    .sprint-card{height:100%;padding:1em 1.1em;border-radius:3px;background:#fff;border:1px solid var(--line)}
+    .sprint-card.now{border-color:var(--red);box-shadow:0 0 0 3px rgba(227,38,38,.18)}
+    .sprint-card ul{padding-left:20px;margin-bottom:0}
+    .phase{display:block;font-size:var(--fs-label);font-weight:900;letter-spacing:.14em;color:var(--muted);margin-bottom:.4em}
+    .sprint-card.now .phase{color:var(--red-dark)}
+
+    /* ── 9 아키텍처 ─────────────────────────────────────── */
+    .architecture{width:100%;display:grid;grid-template-rows:auto auto;gap:28px}
+    .journey{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:9px}
+    .journey span{padding:.45em .7em;border-radius:2px;background:#262626;color:#fff;font-weight:800;font-size:var(--fs-body)}
+    .journey b{color:var(--red);font-size:var(--fs-body)}
+    .service-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+    .service{padding:.85em .9em;border-radius:3px;background:#fff;border:2px solid var(--line)}
+    .service.confirmed{border-color:var(--gray)}
+    .service.proposed{border-color:var(--red)}
+    .service.backlog{border-style:dashed;border-color:var(--pending);background:#fafafa}
+    .service small{display:block;margin-bottom:.5em;color:var(--muted);font-weight:800;font-size:var(--fs-label)}
+    .service strong{display:block;font-size:var(--fs-h3);margin-bottom:.3em;letter-spacing:-.03em;word-break:keep-all}
+    .service p{font-size:var(--fs-body);margin:0 0 .5em;color:var(--muted);line-height:1.4;word-break:keep-all}
+    .service .chip{display:inline-flex;align-items:center;gap:.45em;font-size:var(--fs-label);font-weight:900;color:var(--muted)}
+    .service .chip::before{content:"";width:.55em;height:.55em;border-radius:50%;background:var(--gray);flex:none}
+    .service.proposed .chip::before{background:var(--red)}
+    .service.backlog .chip::before{background:#fff;border:2px solid var(--pending)}
+
+    /* ── 10 API ─────────────────────────────────────────── */
+    .api-layout{width:100%;display:grid;grid-template-columns:.8fr 1.2fr;gap:26px;align-items:stretch}
+    .action-flow{display:flex;flex-direction:column;justify-content:center;gap:10px}
+    .action{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:.7em;padding:.6em .8em;border-radius:3px;background:#fff;border:1px solid var(--line)}
+    .action b{width:1.7em;height:1.7em;display:grid;place-items:center;border-radius:50%;background:var(--red);color:#fff;font-size:var(--fs-body)}
+    .action p{margin:0;font-weight:800}
+    .action small{color:var(--muted);font-size:var(--fs-label)}
+    .api-table{border-radius:3px;overflow:hidden;background:#fff;border:1px solid var(--line)}
+    .api-row{display:grid;grid-template-columns:4.5em 1.25fr 1fr;gap:.7em;padding:.55em .8em;border-bottom:1px solid var(--line);align-items:center;font-size:var(--fs-body)}
+    .api-row:last-child{border:0}
+    .method{font-family:ui-monospace,monospace;font-weight:900;color:var(--red-dark)}
+    .path{font-family:ui-monospace,monospace;font-size:.92em;overflow-wrap:anywhere}
+    .api-row small{color:var(--muted);font-size:var(--fs-label)}
+
+    /* ── 11 동작 화면 ───────────────────────────────────── */
+    .screens{width:100%;display:grid;grid-template-columns:repeat(5,1fr);gap:14px;align-items:start}
+    .screen{position:relative}
+    .screen::after{content:"\2192";position:absolute;right:-.55em;top:0;margin-top:calc(37.5% - .5em);font-size:var(--fs-h3);color:var(--pending);z-index:3}
+    .screen:last-child::after{display:none}
+    .frame{aspect-ratio:4/3;border-radius:2px;border:1px solid var(--line);background:#fff;overflow:hidden;box-shadow:0 12px 24px rgba(16,35,63,.08)}
+    .browserbar{height:25px;background:#e8edf2;display:flex;align-items:center;gap:4px;padding:0 9px}
+    .browserbar i{width:6px;height:6px;border-radius:50%;background:#aeb9c5}
+    .wire{padding:15px}
+    .wire .line{height:8px;border-radius:8px;background:#dfe6ec;margin-bottom:9px}
+    .wire .line.accent{background:var(--red);width:46%}
+    .wire .block{height:54px;border-radius:10px;background:#f0f0f0;margin:12px 0}
+    .wire .button{width:50%;height:22px;border-radius:7px;background:var(--red)}
+    .screen figcaption{margin-top:.6em;font-size:var(--fs-label);line-height:1.4;word-break:keep-all}
+    .screen figcaption strong{display:block;margin-bottom:.15em}
+    .screen figcaption span{color:var(--muted);font-family:ui-monospace,monospace;font-size:.9em}
+
+    /* ── 11b 제품 화면 + 콜아웃 (패턴 M) ────────────────── */
+    .shot-split{width:100%;display:grid;grid-template-columns:1.35fr 1fr;gap:26px;align-items:start}
+    .shot{position:relative;height:330px;border-radius:3px;border:1px solid var(--line);background:#fff;
+          overflow:hidden;box-shadow:0 14px 28px rgba(16,35,63,.10)}
+    .shot img{display:block;width:100%;height:100%;object-fit:cover;object-position:top left}
+    .pin{position:absolute;width:1.6em;height:1.6em;border-radius:50%;background:var(--red);color:#fff;
+         font-size:var(--fs-body);font-weight:900;display:flex;align-items:center;justify-content:center;
+         box-shadow:0 3px 10px rgba(0,0,0,.28);z-index:2}
+    .shot-caption{margin-top:.5em;font-size:var(--fs-label);color:var(--muted);word-break:keep-all}
+    .callouts{display:flex;flex-direction:column;gap:.75em}
+    .callout{display:grid;grid-template-columns:1.6em 1fr;gap:.65em;align-items:start}
+    .callout .pin{position:static;box-shadow:none}
+    .callout strong{display:block;font-size:var(--fs-body);font-weight:900;word-break:keep-all}
+    .callout p{margin:.1em 0 0;font-size:var(--fs-label);color:var(--muted);line-height:1.45;word-break:keep-all}
+    .callout code{font-family:ui-monospace,monospace;font-size:.95em;color:var(--red-dark);font-weight:800}
+
+    /* ── 12 검증 ────────────────────────────────────────── */
+    .metric-list{width:100%;display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+    .metric{padding:1em 1.1em;border-radius:3px;background:#fff;border:1px solid var(--line)}
+    .metric small{color:var(--red-dark);font-weight:900;letter-spacing:.12em;font-size:var(--fs-label)}
+    .metric p{color:var(--muted);margin-bottom:0}
+    .decision-note{margin-top:.7em;padding:.7em .9em;border-left:5px solid var(--red);background:var(--red-soft);
+                   font-size:var(--fs-body);font-weight:850;word-break:keep-all}
+
+    /* ── 푸터·컨트롤 ────────────────────────────────────── */
+    .foot{display:flex;justify-content:space-between;align-items:center;color:#777;font-size:var(--fs-label);gap:1.5em}
+    .dark .foot{color:#c9c9c9}
+    .controls{position:fixed;right:24px;bottom:20px;z-index:30;display:flex;gap:8px}
+    .controls button{width:42px;height:42px;border:0;border-radius:2px;background:rgba(255,255,255,.92);color:var(--ink);cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.2);font-size:18px}
+    .controls button:hover{background:var(--red);color:#fff}
+    .progress{position:fixed;z-index:40;bottom:0;left:0;height:4px;background:var(--red);transition:.3s;width:10%}
+
+    /* 모바일 반응형 없음 — 발표용 덱은 16:9 화면과 인쇄만 대상으로 한다.
+       캔버스가 고정이라 레이아웃이 화면에 따라 변하지 않는다. */
+    @media print{
+      /* 1280x720px = 96dpi 기준 13.333x7.5in = 960x540pt. 화면 캔버스와 완전히 동일하다. */
+      @page{size:1280px 720px;margin:0}
+      html,body{overflow:visible;background:#fff;height:auto}
+      *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      .stage{position:static;display:block;background:#fff;overflow:visible}
+      /* JS가 넣은 인라인 transform을 !important로 눌러야 한다. */
+      .deck{width:auto;height:auto;transform:none!important}
+      .slide{position:relative;display:grid!important;opacity:1!important;transform:none!important;
+             page-break-after:always;break-after:page;width:var(--canvas-w);height:var(--canvas-h);overflow:hidden}
+      .slide:last-child{page-break-after:auto;break-after:auto}
+      .controls,.progress{display:none}
+    }
+    @media(prefers-reduced-motion:reduce){.slide,.progress{transition:none}}
+  </style>
+</head>
+<body>
+  <div class="stage">
+  <main class="deck" aria-label="발표자료">
+
+    <!-- ═══ 패턴 A · 표지 (dark) ══════════════════════════════════
+         예산: 제목 2줄 + 부제 1줄 + 한 문장. 그 이상 넣지 않는다. -->
+    <section class="slide dark active" data-title="표지">
+      <div class="content">
+        <div class="cover-content">
+          <div class="cover-copy">
+            <p class="kicker">KICKER</p>
+            <h1>핵심 주장을<br><span class="accent">한 줄로</span></h1>
+            <p class="lead">부제 · 서비스명</p>
+            <p class="bridge-question">한 문장으로 무엇을 하는지.</p>
+          </div>
+          <div class="cover-visual-wrap">
+            <img class="cover-visual" src="assets/COVER.png" alt="설명">
+          </div>
+        </div>
+      </div>
+      <footer class="foot"><span>발표 제목</span><span class="page"></span></footer>
+    </section>
+
+    <!-- ═══ 패턴 B · 2단 대비 ═══════════════════════════════════
+         예산: 카드 2개 × 6~8줄. 가장 여유 있는 레이아웃. -->
+    <section class="slide" data-title="대비">
+      <header class="slide-head"><div><p class="kicker">KICKER</p><h2>두 항목을 나란히 두고 차이를 보여줍니다</h2></div></header>
+      <div class="content">
+        <div class="thesis-grid">
+          <article class="thesis-card fading">
+            <span class="trend">↓ 줄어드는 쪽</span><h3>항목 A</h3>
+            <ul><li>근거</li><li>근거</li><li>근거</li></ul>
+            <p class="lead">한 줄 결론</p>
+          </article>
+          <article class="thesis-card keeping">
+            <span class="trend">↑ 커지는 쪽</span><h3>항목 B</h3>
+            <ul><li>근거</li><li>근거</li><li>근거</li></ul>
+            <p class="final-line">강조 결론</p>
+          </article>
+        </div>
+      </div>
+      <footer class="foot"><span>보조 메시지</span><span class="page"></span></footer>
+    </section>
+
+    <!-- ═══ 패턴 C · 사진 + 서술 ════════════════════════════════
+         예산: 우측 = 리드 2줄 + 인용 1줄 + 항목 4개 + 결론 1줄. 초과 금지. -->
+    <section class="slide" data-title="문제">
+      <header class="slide-head"><div><p class="kicker">KICKER</p><h2>상황을 장면으로 보여줍니다</h2></div></header>
+      <div class="content split">
+        <div class="photo-card">
+          <img src="assets/PHOTO.png" alt="설명">
+          <div class="photo-overlay"><div class="big-quote">짧은<br>선언.</div></div>
+        </div>
+        <div>
+          <p class="lead">상황 서술 두 줄까지.</p>
+          <div class="speech">“현장에서 나올 법한 한 마디.”</div>
+          <ul><li>결과 1</li><li>결과 2</li><li>결과 3</li><li>결과 4</li></ul>
+          <p class="final-line">한 줄 결론.</p>
+        </div>
+      </div>
+      <footer class="foot"><span>보조 메시지</span><span class="page"></span></footer>
+    </section>
+
+    <!-- ═══ 패턴 D · 5열 매트릭스 ═══════════════════════════════
+         예산: 셀당 1~2줄, 라벨 수준만. 강조는 .hot 하나만. -->
+    <section class="slide" data-title="매핑">
+      <header class="slide-head"><div><p class="kicker">A → B</p><h2>문제와 대응을 한 줄씩 잇습니다</h2></div></header>
+      <div class="content">
+        <div class="matrix">
+          <p class="matrix-caption">윗줄 제목</p>
+          <div class="matrix-row problems">
+            <div class="mcell"><span class="no">P1</span><strong>이름</strong><p>한 구절</p></div>
+            <div class="mcell"><span class="no">P2</span><strong>이름</strong><p>한 구절</p></div>
+            <div class="mcell"><span class="no">P3</span><strong>이름</strong><p>한 구절</p></div>
+            <div class="mcell"><span class="no">P4</span><strong>이름</strong><p>한 구절</p></div>
+            <div class="mcell"><span class="no">P5</span><strong>이름</strong><p>한 구절</p></div>
+          </div>
+          <div class="matrix-arrows"><span>↓</span><span>↓</span><span>↓</span><span>↓</span><span>↓</span></div>
+          <p class="matrix-caption">아랫줄 제목</p>
+          <div class="matrix-row features">
+            <div class="mcell"><p>대응</p></div>
+            <div class="mcell"><p>대응</p></div>
+            <div class="mcell"><p>대응</p></div>
+            <div class="mcell hot"><p>대응</p><span class="newly">여기가 핵심</span></div>
+            <div class="mcell"><p>대응</p></div>
+          </div>
+          <p class="matrix-outcome">→ 한 줄로 묶은 결론.</p>
+        </div>
+      </div>
+      <footer class="foot"><span>보조 메시지</span><span class="page"></span></footer>
+    </section>
+
+    <!-- ═══ 패턴 E · 1 + 4 비대칭 ═══════════════════════════════
+         우선순위가 있는 목록에 쓴다. 균등 5열은 "다 똑같이 중요하다"고 말해버린다.
+         예산: 주 카드 6줄, 위성 2줄. -->
+    <section class="slide" data-title="이해관계자">
+      <header class="slide-head"><div><p class="kicker">KICKER</p><h2>누구에게 무엇이 바뀌는지 보여줍니다</h2></div></header>
+      <div class="content">
+        <div class="impact-layout">
+          <article class="impact-card primary">
+            <div><div class="avatar">★</div><h3>1순위 대상</h3></div>
+            <div>
+              <p class="before">지금</p><p class="after">바뀐 뒤</p>
+              <p class="priority-note">왜 이쪽이 1순위인지 한 문장.</p>
+            </div>
+          </article>
+          <article class="impact-card"><div class="avatar">A</div><div><h3>대상</h3><p class="before">지금</p><p class="after">바뀐 뒤</p></div></article>
+          <article class="impact-card"><div class="avatar">B</div><div><h3>대상</h3><p class="before">지금</p><p class="after">바뀐 뒤</p></div></article>
+          <article class="impact-card"><div class="avatar">C</div><div><h3>대상</h3><p class="before">지금</p><p class="after">바뀐 뒤</p></div></article>
+          <article class="impact-card"><div class="avatar">D</div><div><h3>대상</h3><p class="before">지금</p><p class="after">바뀐 뒤</p></div></article>
+        </div>
+      </div>
+      <footer class="foot"><span>보조 메시지</span><span class="page"></span></footer>
+    </section>
+
+    <!-- ═══ 패턴 F · 역할 분담 (2단 + 연결기호) ══════════════════ -->
+    <section class="slide" data-title="역할">
+      <header class="slide-head"><div><p class="kicker">KICKER</p><h2>누가 무엇을 맡는지 나눕니다</h2></div></header>
+      <div class="content">
+        <div class="before-after">
+          <article class="scene ai">
+            <div><span class="role-tag ai">쪽 A</span><h3 style="margin-top:14px">역할</h3></div>
+            <ul><li>항목</li><li>항목</li><li>항목</li></ul>
+            <p class="lead">보충 한 줄.</p>
+          </article>
+          <div class="arrow">＋</div>
+          <article class="scene">
+            <div><span class="role-tag human">쪽 B</span><h3 style="margin-top:14px">역할</h3></div>
+            <ul><li>항목</li><li>항목</li><li>항목</li></ul>
+            <p class="final-line">경계선이 되는 한 문장.</p>
+          </article>
+        </div>
+      </div>
+      <footer class="foot"><span>보조 메시지</span><span class="page"></span></footer>
+    </section>
+
+    <!-- ═══ 패턴 G · 3단계 로드맵 ═══════════════════════════════ -->
+    <section class="slide" data-title="로드맵">
+      <header class="slide-head"><div><p class="kicker">ROADMAP</p><h2>어떤 순서로 만드는지 보여줍니다</h2></div></header>
+      <div class="content">
+        <div class="roadmap">
+          <article class="sprint"><div class="station">1</div>
+            <div class="sprint-card"><span class="phase">1단계 · 완료</span><h3>제목</h3><ul><li>항목</li><li>항목</li></ul></div></article>
+          <article class="sprint"><div class="station">2</div>
+            <div class="sprint-card now"><span class="phase">2단계 · 진행 중</span><h3>제목</h3><ul><li>항목</li><li>항목</li></ul></div></article>
+          <article class="sprint"><div class="station">3</div>
+            <div class="sprint-card"><span class="phase">3단계 · 예정</span><h3>제목</h3><ul><li>항목</li><li>항목</li></ul></div></article>
+        </div>
+      </div>
+      <footer class="foot"><span>보조 메시지</span><span class="page"></span></footer>
+    </section>
+
+    <!-- ═══ 패턴 H · 상태 구분 카드 (5열) ═══════════════════════
+         구현 상태를 정직하게 표기할 때 쓴다.
+         confirmed=회색(확인됨) / proposed=레드(제안) / backlog=점선(예정)
+         범례와 카드 색은 반드시 같은 의미여야 한다. -->
+    <section class="slide" data-title="구성">
+      <header class="slide-head"><div><p class="kicker">KICKER</p><h2>구성요소와 각각의 상태를 밝힙니다</h2></div></header>
+      <div class="content">
+        <div class="architecture">
+          <div class="journey"><span>단계</span><b>→</b><span>단계</span><b>→</b><span>단계</span><b>→</b><span>단계</span></div>
+          <div class="service-grid">
+            <article class="service confirmed"><small>코드명</small><strong>이름</strong><p>역할</p><span class="chip">현재 확인됨</span></article>
+            <article class="service proposed"><small>코드명</small><strong>이름</strong><p>역할</p><span class="chip">제안</span></article>
+            <article class="service proposed"><small>코드명</small><strong>이름</strong><p>역할</p><span class="chip">제안</span></article>
+            <article class="service backlog"><small>코드명</small><strong>이름</strong><p>역할</p><span class="chip">예정</span></article>
+            <article class="service backlog"><small>코드명</small><strong>이름</strong><p>역할</p><span class="chip">예정</span></article>
+          </div>
+        </div>
+      </div>
+      <footer class="foot">
+        <div class="legend"><span class="badge">현재 확인됨</span><span class="badge plan">제안</span><span class="badge next">예정</span></div>
+        <span class="page"></span>
+      </footer>
+    </section>
+
+
+    <!-- ═══ 패턴 J · 2단 흐름 카드 ══════════════════════════════
+         칩이 줄바꿈돼도 화살표가 줄 끝에 매달리지 않는다(::before 로 붙임). -->
+    <section class="slide" data-title="흐름">
+      <header class="slide-head"><div><p class="kicker">KICKER</p><h2>두 가지 동작 시점을 나눠 설명합니다</h2></div></header>
+      <div class="content">
+        <div class="ai-flow-grid">
+          <article class="flow-card">
+            <span class="mode">MODE A · 시점</span>
+            <h3>언제 무엇을 하는지</h3>
+            <div class="flow-steps"><span>단계</span><span>단계</span><span>단계</span><span>단계</span></div>
+            <p class="lead">무엇을 얻는지 한 줄.</p>
+          </article>
+          <article class="flow-card">
+            <span class="mode">MODE B · 시점</span>
+            <h3>언제 무엇을 하는지</h3>
+            <div class="flow-steps"><span>단계</span><span>단계</span><span>단계</span><span>단계</span></div>
+            <p class="lead">무엇을 얻는지 한 줄.</p>
+          </article>
+        </div>
+      </div>
+      <footer class="foot"><span>보조 메시지</span><span class="page"></span></footer>
+    </section>
+
+    <!-- ═══ 패턴 K · 행동 흐름 + 표 ═════════════════════════════
+         예산: 좌측 4단계, 우측 6행까지. 표를 다 읽지 말고 한 행만 짚는다. -->
+    <section class="slide" data-title="계약">
+      <header class="slide-head"><div><p class="kicker">KICKER</p><h2>행동이 상태 변화로 이어집니다</h2></div><span class="badge">현재 확인됨</span></header>
+      <div class="content">
+        <div class="api-layout">
+          <div class="action-flow">
+            <div class="action"><b>1</b><p>행동<br><small>보조</small></p></div>
+            <div class="action"><b>2</b><p>행동<br><small>보조</small></p></div>
+            <div class="action"><b>3</b><p>행동<br><small>보조</small></p></div>
+            <div class="action"><b>4</b><p>행동<br><small>보조</small></p></div>
+          </div>
+          <div class="api-table">
+            <div class="api-row"><span class="method">GET</span><span class="path">/api/thing</span><small>설명</small></div>
+            <div class="api-row"><span class="method">POST</span><span class="path">/api/thing</span><small>설명</small></div>
+            <div class="api-row"><span class="method">GET</span><span class="path">/api/thing/:id</span><small>설명</small></div>
+            <div class="api-row"><span class="method">POST</span><span class="path">/api/other</span><small>설명</small></div>
+          </div>
+        </div>
+      </div>
+      <footer class="foot"><span>보조 메시지</span><span class="page"></span></footer>
+    </section>
+
+    <!-- ═══ 패턴 L · 5단계 스토리보드 ═══════════════════════════
+         .frame 은 실제 화면 캡처로 교체한다. 와이어프레임 상태로 발표하면
+         "구현했다"가 아니라 "이렇게 만들고 있다"로 말해야 한다. -->
+    <section class="slide" data-title="스토리보드">
+      <header class="slide-head"><div><p class="kicker">KICKER</p><h2>사용자가 무엇을 경험하는지 보여줍니다</h2></div><span class="badge">현재 확인됨</span></header>
+      <div class="content">
+        <div class="screens">
+          <figure class="screen"><div class="frame"><div class="browserbar"><i></i><i></i><i></i></div><div class="wire"><div class="line accent"></div><div class="line"></div><div class="block"></div><div class="line"></div><div class="button"></div></div></div><figcaption><strong>① 단계</strong><span>보조</span></figcaption></figure>
+          <figure class="screen"><div class="frame"><div class="browserbar"><i></i><i></i><i></i></div><div class="wire"><div class="line accent"></div><div class="line"></div><div class="block"></div><div class="line"></div><div class="button"></div></div></div><figcaption><strong>② 단계</strong><span>보조</span></figcaption></figure>
+          <figure class="screen"><div class="frame"><div class="browserbar"><i></i><i></i><i></i></div><div class="wire"><div class="line accent"></div><div class="line"></div><div class="block"></div><div class="line"></div><div class="button"></div></div></div><figcaption><strong>③ 단계</strong><span>보조</span></figcaption></figure>
+          <figure class="screen"><div class="frame"><div class="browserbar"><i></i><i></i><i></i></div><div class="wire"><div class="line accent"></div><div class="line"></div><div class="block"></div><div class="line"></div><div class="button"></div></div></div><figcaption><strong>④ 단계</strong><span>보조</span></figcaption></figure>
+          <figure class="screen"><div class="frame"><div class="browserbar"><i></i><i></i><i></i></div><div class="wire"><div class="line accent"></div><div class="line"></div><div class="block"></div><div class="line"></div><div class="button"></div></div></div><figcaption><strong>⑤ 단계</strong><span>보조</span></figcaption></figure>
+        </div>
+      </div>
+      <footer class="foot"><span>보조 메시지</span><span class="page"></span></footer>
+    </section>
+
+    <!-- ═══ 패턴 M · 제품 화면 + API·데이터 콜아웃 ══════════════
+         언제: 만든 화면이 실제로 무엇을 하는지, 그 뒤에 어떤 계약이 붙는지 같이 보일 때.
+         예산: 핀 3~4개. 항목당 제목 1줄 + 설명 2줄. 그 이상은 청중이 화면과 글을
+               번갈아 보다 둘 다 놓친다.
+         캡처: 전체 화면을 넣지 않는다. 말하려는 관심 영역만 잘라 쓴다.
+               잘라 낸 이미지 안의 글자도 슬라이드 높이의 2% 하한을 지켜야 한다.
+         핀 좌표(left/top %)는 잘라 낸 이미지에 맞춰 직접 맞춘다. -->
+    <section class="slide" data-title="동작">
+      <header class="slide-head"><div><p class="kicker">EXPERIENCE</p><h2>화면에서 무엇을 받는지 보여줍니다</h2></div></header>
+      <div class="content shot-split">
+        <div>
+          <figure class="shot">
+            <img src="assets/PHOTO.png" alt="제품 화면 중 관심 영역">
+            <span class="pin" style="left:6%;top:10%">1</span>
+            <span class="pin" style="left:6%;top:46%">2</span>
+            <span class="pin" style="left:6%;top:78%">3</span>
+          </figure>
+          <p class="shot-caption">관심 영역만 잘라 낸 실제 화면.</p>
+        </div>
+        <div class="callouts">
+          <div class="callout"><span class="pin">1</span><div>
+            <strong>무엇이 보이는가</strong>
+            <p>한 줄 설명. <code>GET /resource</code> 가 채운다.</p></div></div>
+          <div class="callout"><span class="pin">2</span><div>
+            <strong>무엇이 보이는가</strong>
+            <p>한 줄 설명. 어떤 상태값이 이 표시를 결정하는지.</p></div></div>
+          <div class="callout"><span class="pin">3</span><div>
+            <strong>무엇이 보이는가</strong>
+            <p>한 줄 설명. <code>POST /resource</code> 로 이어진다.</p></div></div>
+        </div>
+      </div>
+      <footer class="foot"><span>보조 메시지</span><span class="page"></span></footer>
+    </section>
+
+    <!-- ═══ 패턴 I · 4열 지표 + 결정 요청 (마무리) ═══════════════ -->
+    <section class="slide" data-title="검증">
+      <header class="slide-head"><div><p class="kicker">DECISION</p><h2>무엇으로 성공을 판단할지 정합니다</h2></div></header>
+      <div class="content" style="flex-direction:column;align-items:stretch;justify-content:center">
+        <div class="metric-list">
+          <article class="metric"><small>영역</small><h3>지표</h3><p>무엇을 재는지.</p></article>
+          <article class="metric"><small>영역</small><h3>지표</h3><p>무엇을 재는지.</p></article>
+          <article class="metric"><small>영역</small><h3>지표</h3><p>무엇을 재는지.</p></article>
+          <article class="metric"><small>영역</small><h3>지표</h3><p>무엇을 재는지.</p></article>
+        </div>
+        <p class="decision-note">요청하는 결정: 항목 · 항목 · 항목</p>
+      </div>
+      <footer class="foot"><span>마무리 메시지</span><span class="page"></span></footer>
+    </section>
+
+  </main>
+  </div>
+  <div class="controls" aria-label="슬라이드 제어"><button id="prev" aria-label="이전">←</button><button id="next" aria-label="다음">→</button></div>
+  <div id="progress" class="progress"></div>
+
+  <script>
+    /* ── 엔진 ── 여기는 건드리지 않는다. 내용은 위 마크업에서만 바꾼다. ── */
+
+    /* 화면에 맞춰 캔버스를 통째로 확대·축소한다. 16:9가 아니면 검정 여백이 남는다. */
+    const deck=document.querySelector('.deck');
+    function fit(){ deck.style.transform=`scale(${Math.min(innerWidth/1280, innerHeight/720)})`; }
+    addEventListener('resize',fit); fit();
+
+    const slides=[...document.querySelectorAll('.slide')]; let index=0;
+    function show(next){
+      index=Math.max(0,Math.min(slides.length-1,next));
+      slides.forEach((s,i)=>{s.classList.toggle('active',i===index);s.classList.toggle('past',i<index)});
+      document.querySelector('#progress').style.width=`${(index+1)/slides.length*100}%`;
+      history.replaceState(null,'',`#${index+1}`);
+    }
+    document.querySelector('#prev').onclick=()=>show(index-1);
+    document.querySelector('#next').onclick=()=>show(index+1);
+    addEventListener('keydown',e=>{
+      if(['ArrowRight',' ','PageDown'].includes(e.key)){e.preventDefault();show(index+1)}
+      if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();show(index-1)}
+      if(e.key==='Home')show(0); if(e.key==='End')show(slides.length-1);
+    });
+    const initial=Number(location.hash.slice(1));
+    show(Number.isFinite(initial)&&initial>0?initial-1:0);
+
+    /* 페이지 번호를 자동으로 채운다. 슬라이드를 넣고 빼도 어긋나지 않는다. */
+    slides.forEach((s,i)=>{
+      const n=s.querySelector('.foot .page');
+      if(n) n.textContent=`${String(i+1).padStart(2,'0')} / ${slides.length}`;
+    });
+  </script>
+</body>
+</html>
