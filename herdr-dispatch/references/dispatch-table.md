@@ -84,12 +84,14 @@ auto 모드에서도 분류기가 기본 차단하는 것들이 있다 — force
 |---|---|
 | 모델 | `-m <이름>` — 아래 표의 실제 모델명 |
 | 추론 | `-c model_reasoning_effort=low\|medium\|high\|xhigh\|max\|ultra` (기본 `medium`) |
-| 권한 | `-s read-only` (읽기 전용) · `--approve-for-me` (편집 + 리뷰어 검토) |
+| 권한 | `-s read-only -a never` (읽기 전용 — **`-a never` 필수**, 아래 경고) · `--approve-for-me` (편집 + 리뷰어 검토) |
 
 ```bash
 herdr agent start reviewer --kind codex --pane <pane-id> \
-  -- -m gpt-5.6-terra -c model_reasoning_effort=high -s read-only
+  -- -m gpt-5.6-terra -c model_reasoning_effort=high -s read-only -a never
 ```
+
+> **⚠ `-s read-only`만으로는 읽기 전용이 아니다** (2026-09-28 실제 사고). `~/.codex/config.toml`에 `approvals_reviewer = "auto_review"`가 전역으로 켜져 있으면, 승인 정책이 기본 `on-request`로 남아 샌드박스 이탈 요청을 **자동 리뷰어가 승인**한다. PR #215 리뷰어가 이 경로로 네트워크를 쓰고 `gh api -X POST`로 사용자 계정 이름의 PR 리뷰 코멘트를 게시했다. 읽기 전용 역할은 반드시 `-a never`를 같이 줘서 이탈 요청이 승인 대신 실패로 돌아오게 한다. 프롬프트에도 "외부 게시(gh/git push/코멘트) 금지"를 명시한다.
 
 **codex의 권한은 축이 두 개다** — 무엇에 닿을 수 있나(`-s`)와 언제 멈추나(`-a`).
 

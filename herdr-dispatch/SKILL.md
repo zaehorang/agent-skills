@@ -33,7 +33,7 @@ herdr 스킬이 바이너리와 다르면 세션 시작 훅이 안 돌았다는 
 역할마다 모델·추론·권한을 정한다. **정한 이유를 한 줄로 남긴다** — 나중에 표를 고칠 때 이 기록이 근거가 된다.
 
 ```
-reviewer: codex / terra / high / read-only
+reviewer: codex / terra / high / read-only (-s read-only -a never)
   → 리뷰는 엣지 케이스를 따라가야 해서 추론을 올림. 고치라고 부른 게 아니라 읽기 전용.
 ```
 
@@ -41,7 +41,7 @@ reviewer: codex / terra / high / read-only
 
 권한은 두 갈래다:
 
-- **읽기만 하면 되는 역할** — 읽기 전용으로 띄운다 (`--permission-mode plan` / `-s read-only`). 가장 안전하다.
+- **읽기만 하면 되는 역할** — 읽기 전용으로 띄운다 (`--permission-mode plan` / `-s read-only -a never`). 가장 안전하다. codex는 `-a never`를 빼면 전역 auto_review가 샌드박스 이탈을 승인해버린다 (dispatch-table.md 경고 참고).
 - **편집이 필요한 역할** — 승인을 모델이 대신 받는 모드를 켠다 (`--permission-mode auto` / `--approve-for-me`). 편집만 허용하는 중간 단계(`acceptEdits`, `-s workspace-write` 단독)로 띄우지 말 것 — 파일은 고치는데 테스트·git 같은 bash 명령마다 멈춰서, 사용자가 프롬프트를 하나씩 답하게 된다.
 
 자동 검토를 켜도 프롬프트가 0이 되지는 않는다. 분류기·리뷰어가 위험하다고 판정하면 여전히 `blocked`이고, 그건 사용자에게 가져간다.
