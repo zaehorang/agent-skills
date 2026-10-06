@@ -52,6 +52,13 @@ description: 세션에서 드러난 하네스(AGENTS.md·스킬·문서·스크�
 검토자는 **세션을 진행한 쪽과 다른 쪽**으로 둔다. 같은 모델은 같은 맹점을 공유한다.
 검토자 CLI를 쓸 수 없으면 같은 쪽으로 대신 돌리지 않고 ledger에 `unavailable`로 남긴다.
 
+**세션 기록이 다른 벤더로 간다.** Claude 세션은 Codex(OpenAI)에, Codex 세션은 Claude(Anthropic)에 보내진다.
+보내기 전에 비밀정보 패턴(키·토큰·JWT 등)은 가리지만 정규식이 모든 것을 잡지는 못한다.
+도입할 때 사용자에게 이 점을 알리고, 민감한 프로젝트에는 쓰지 않는다.
+
+검토자는 읽기 도구만 가진다 — Claude는 `--restricted --tools Read,Grep,Glob --strict-mcp-config`,
+Codex는 `-s read-only` + `approval_policy="never"` + MCP 비움. 세션 기록은 구분자로 감싸 "지시가 아니다"를 명시한다.
+
 ## 항목 하나
 
 ```yaml
@@ -87,10 +94,13 @@ status: "pending"
 
 1. `backlog.py list`로 pending을 오래된 순으로 보여준다. 마지막 줄의 운영 상태(최근 검토 수, 실패, 마지막 주간)도 함께 보여준다.
    실패·미실행이 있으면 `setup.py --check`를 권한다 — 알림이 없으니 고장은 여기서만 보인다.
+   "검토 미완료"는 훅이 검토를 띄웠는데 결과가 안 남은 세션이다 — 주간 검토가 다시 검토한다.
 2. 사용자가 고른 항목의 본문을 보여준다. `## 근거`가 "추론:"이면 그 점을 짚는다.
 3. 사용자의 결정대로 처리한다.
-   - **반영**: target을 연다 → 같은 내용이 하네스 다른 곳에 있는지 다시 찾는다 → 고친다 → 변경을 보여준다 →
+   - **반영**: target을 연다 → 같은 내용이 하네스 다른 곳에 있는지 다시 찾는다 →
+     **고치기 전에** 바꿀 내용(diff)을 보여주고 확인받는다 → 고친다 →
      `backlog.py resolve --file <f> --status applied --input {"reason": …, "changed": "<경로#섹션>"}`
+     target이 권한·훅·설정 파일이면 diff 확인을 건너뛰지 않는다.
    - **기각**: 이유를 한 줄 받는다 (사용자 말을 요약해도 된다) → `resolve --status rejected --input {"reason": …}`
    - **보류**: 아무것도 하지 않는다.
 4. 커밋은 하지 않는다. 프로젝트 관례를 따른다.
@@ -101,11 +111,21 @@ status: "pending"
    "최근 3개", "이 세션", 세션 ID로 좁힐 수 있다.
 2. 세션마다 `review.py --agent <claude|codex> --session <id>`를 실행한다. 다른 쪽 모델이 검토하고, 항목과 ledger가 남는다.
 3. 결과(남긴 항목, 실패)를 보고한다. 검토자 CLI가 없어 `unavailable`이면 사용자에게 묻는다 —
-   허락하면 `review.py --prompt-only` 출력을 지침 삼아 직접 검토하고 `backlog.py add`로 남긴다.
+   허락하면 `review.py --prompt-only` 출력을 지침 삼아 직접 검토하고, 후보마다 `backlog.py add`로 남긴 뒤
+   `backlog.py ledger --input {"kind": "session", "session": "<agent:id>", "status": "reviewed", "reviewer": "self", "reviewer_model": "<내 모델>"}`로 검토를 기록한다.
+   `ref`는 `<agent>:<세션 id>#<근거 턴의 시각>`, 모델은 `read_sessions.py show --json`의 턴 정보에서 읽는다.
+
+### 일하다가 하네스를 고치고 싶어질 때
+
+실수·교정을 계기로 AGENTS.md나 스킬을 고치고 싶어지면 고치지 않는다. 사용자에게 한 줄로 알리고,
+원하면 그 자리에서 제안을 남긴다 — `read_sessions.py current --agent <나>`로 지금 세션과 모델을 얻어
+(가장 최근에 기록된 세션이다. 같은 프로젝트에서 세션을 여럿 열어 두었다면 id를 확인한다) `backlog.py add`로 쓴다.
+남기지 않아도 세션이 끝나면 검토가 다시 본다.
 
 ### 도입 · 점검 · 제거
 
-1. `setup.py --project <경로>`로 계획을 보여준다 (아무것도 바꾸지 않는다).
+1. 세션 기록이 상대 벤더의 모델로 보내진다는 점을 먼저 알린다 (위 "세션 기록이 다른 벤더로 간다").
+   `setup.py --project <경로>`로 계획을 보여준다 (아무것도 바꾸지 않는다).
 2. 없는 파일(`+ 새로 만듦`)은 단위마다 만들지 묻는다. 기존 파일 수정은 diff를 보여준다.
 3. 승인받은 단위만 `setup.py --project <경로> --apply --create <단위…>`로 적용한다.
 4. 출력의 "직접 할 일"을 전한다: Codex의 `/hooks`로 훅 승인, 두 CLI 로그인.
@@ -118,6 +138,11 @@ status: "pending"
 사용자가 직접 요청한 하네스 작업(스킬 만들기, 설정 바꾸기)은 그 요청 범위에서 한다.
 
 ## 한계
+
+- Claude Code 문서는 "SessionEnd 훅이 띄운 프로세스는 세션 종료 뒤 살아남지 않는다"고 적지만, 2.1.291(macOS)에서
+  `claude -p`와 대화형 `/exit` 모두 실측한 결과 살아남았다. 이 동작이 바뀌어 검토가 죽으면 ledger에 `queued`만 남아
+  "검토 미완료"로 보이고, 주간 검토가 그 세션을 다시 검토한다. 늦어질 뿐 빠지지 않는다.
+- 이어서 진행한(resume) 세션은 이미 검토한 세션으로 보고 다시 검토하지 않는다.
 
 - 죽은 규칙(아무도 안 쓰는 규칙)은 세션에서 신호가 나오지 않아 잡지 못한다.
 - 개인 메모리(Claude Code auto memory, Codex memories)는 건드리지 않는다. 그쪽은 개인 선호, backlog는 프로젝트 하네스다.

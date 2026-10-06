@@ -10,6 +10,7 @@ Codex SessionEnd 훅은 최대 3초라서 여기서는 아무것도 기다리지
 훅은 세션 종료를 막으면 안 되므로 어떤 경우에도 0으로 끝난다.
 """
 
+import datetime as dt
 import json
 import os
 import subprocess
@@ -18,6 +19,14 @@ from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
 PROJECT = SCRIPTS.parents[3]  # <project>/.claude/skills/harness-backlog/scripts
+
+
+def session_key(agent: str, transcript: str, data: dict) -> str:
+    """review.py 가 쓰는 키와 같게, 기록 파일 안의 세션 id를 쓴다."""
+    sys.path.insert(0, str(SCRIPTS))
+    import read_sessions as rs
+    meta = (rs._claude_meta if agent == "claude" else rs._codex_meta)(Path(transcript))
+    return f"{agent}:{(meta or {}).get('id') or data.get('session_id', '?')}"
 
 
 def main() -> int:
@@ -31,6 +40,12 @@ def main() -> int:
     bdir = PROJECT / "history" / "harness-backlog"
     if not transcript or not (bdir / "config.json").exists():
         return 0
+    # 결과가 끝내 안 남으면(검토 프로세스가 죽으면) 운영 줄에 "검토 미완료"로 보이게 먼저 적어 둔다.
+    # 세션 정리 정책이 바뀌어 프로세스가 죽더라도 주간 검토가 ledger에 결과가 없는 세션을 다시 검토한다.
+    entry = {"at": dt.datetime.now().astimezone().isoformat(timespec="seconds"), "kind": "session",
+             "session": session_key(sys.argv[1], transcript, data), "agent": sys.argv[1], "status": "queued"}
+    with open(bdir / "ledger.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     log_dir = bdir / "logs"
     log_dir.mkdir(exist_ok=True)
     with open(log_dir / "review.log", "a") as log:

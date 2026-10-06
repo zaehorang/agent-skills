@@ -254,7 +254,11 @@ def plan_install(project: Path, weekly: tuple[int, int, int]) -> list[Step]:
     bdir = hb.backlog_dir(project)
     cfg_path = bdir / "config.json"
     if cfg_path.exists():
-        steps.append(Step("backlog-dir", str(hb.BACKLOG_REL), "skip", "config.json 있음"))
+        if hb.ledger_baseline(hb.ledger_read(project)):
+            steps.append(Step("backlog-dir", str(hb.BACKLOG_REL), "skip", "config.json · 도입 기준 시각 있음"))
+        else:
+            steps.append(Step("backlog-dir", "history/harness-backlog/ledger.jsonl", "modify", "도입 기준 시각 기록",
+                              lambda: hb.ledger_append(project, {"kind": "setup", "baseline": hb.iso(hb.now())})))
     else:
         cfg = json.loads(json.dumps(hb.DEFAULT_CONFIG))
         cfg["reviewers"]["claude"]["model"] = _codex_default_model()
@@ -324,6 +328,9 @@ def plan_uninstall(project: Path) -> list[Step]:
     dest = project / SKILL_REL
     if dest.exists() and dest.resolve() != SKILL_DIR:
         steps.append(Step("skill", str(SKILL_REL), "remove", "스킬 사본 제거", lambda: shutil.rmtree(dest)))
+    elif dest.exists():
+        steps.append(Step("skill", str(SKILL_REL), "skip",
+                          "지금 실행 중인 사본이라 지우지 않는다. 다른 위치의 setup.py로 제거하거나 직접 지운다"))
     reg = _registry()
     if str(project) in reg:
         rest = [r for r in reg if r != str(project)]

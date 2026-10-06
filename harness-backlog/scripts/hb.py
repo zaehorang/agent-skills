@@ -32,6 +32,11 @@ SECRET_PATTERNS = {
     "AWS 액세스 키": re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"),
     "GitHub 토큰": re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b"),
     "API 키(sk-)": re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"),
+    "JWT": re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"),
+    "Bearer 토큰": re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{20,}"),
+    "Slack 토큰": re.compile(r"\bxox[abposr]-[A-Za-z0-9-]{10,}"),
+    "결제 키(sk_live)": re.compile(r"\b[rs]k_live_[A-Za-z0-9]{16,}"),
+    "Google API 키": re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b"),
     "이름 붙은 자격증명": re.compile(
         r"(?i)\b(?:api[_-]?key|access[_-]?token|auth[_-]?token|password|passwd|secret)"
         r"\s*[:=]\s*['\"]?[A-Za-z0-9_./+=-]{12,}"
@@ -85,16 +90,26 @@ def backlog_dir(project: Path) -> Path:
     return project / BACKLOG_REL
 
 
+def _merge(base: dict, over: dict) -> dict:
+    for k, v in over.items():
+        if isinstance(v, dict) and isinstance(base.get(k), dict):
+            _merge(base[k], v)
+        else:
+            base[k] = v
+    return base
+
+
 def load_config(project: Path) -> dict:
+    """기본값 위에 프로젝트 값을 깊게 덮는다. 일부 키만 적어도 나머지 기본값이 남는다."""
     path = backlog_dir(project) / "config.json"
     cfg = json.loads(json.dumps(DEFAULT_CONFIG))
     if path.exists():
-        user = json.loads(path.read_text(encoding="utf-8"))
-        for k, v in user.items():
-            if isinstance(v, dict) and isinstance(cfg.get(k), dict):
-                cfg[k].update(v)
-            else:
-                cfg[k] = v
+        try:
+            user = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            raise BacklogError(f"config.json 이 올바른 JSON이 아니다 ({e.lineno}행)")
+        if isinstance(user, dict):
+            _merge(cfg, user)
     return cfg
 
 
@@ -129,7 +144,22 @@ def scan_secrets(*texts: str) -> list[str]:
     return hits
 
 
+def redact(text: str) -> str:
+    """세션 기록을 다른 모델에 보내기 전에 비밀정보로 보이는 값을 가린다."""
+    for name, pat in SECRET_PATTERNS.items():
+        text = pat.sub(f"[가림: {name}]", text)
+    return text
+
+
 # ---------------------------------------------------------------- 항목 형식
+
+SECTION_HEAD_RE = re.compile(r"^## ", re.M)
+
+
+def safe_body(body: str) -> str:
+    """본문 안의 '## ' 줄은 섹션 경계와 헷갈리므로 한 단계 내린다."""
+    return SECTION_HEAD_RE.sub("### ", body.strip())
+
 
 def render_item(front: dict, sections: dict) -> str:
     lines = ["---"]
@@ -138,7 +168,7 @@ def render_item(front: dict, sections: dict) -> str:
             lines.append(f"{k}: {json.dumps(front[k], ensure_ascii=False)}")
     lines.append("---")
     for name, body in sections.items():
-        lines += ["", f"## {name}", body.strip()]
+        lines += ["", f"## {name}", safe_body(body)]
     return "\n".join(lines) + "\n"
 
 
@@ -177,6 +207,8 @@ def iter_items(bdir: Path, resolved: bool = False):
     if not d.is_dir():
         return
     for p in sorted(d.glob("*.md")):
+        if p.name.startswith("."):
+            continue
         try:
             front, sections = read_item(p)
         except BacklogError:
@@ -192,9 +224,14 @@ def publish(path: Path, text: str, *, overwrite: bool = False, verify=None) -> N
     overwrite=False면 os.link로 발행해 이미 있는 파일을 덮지 않는다.
     어느 단계에서 실패해도 반쪽짜리 최종 파일은 남지 않는다.
     """
+    if overwrite and path.is_symlink():
+        path = path.resolve()  # 링크(AGENTS.md → CLAUDE.md 등)를 끊지 않고 가리키는 파일에 쓴다
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix=".tmp-", suffix=".md", dir=path.parent)
     try:
+        umask = os.umask(0)
+        os.umask(umask)
+        os.chmod(tmp, path.stat().st_mode & 0o777 if path.exists() else 0o666 & ~umask)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(text)
             f.flush()
@@ -254,3 +291,13 @@ def reviewed_sessions(entries: list[dict]) -> set[str]:
         if e.get("kind") == "session" and e.get("session")
         and e.get("status") in ("reviewed", "skipped")
     }
+
+
+def unfinished_sessions(entries: list[dict]) -> set[str]:
+    """훅이 검토를 띄웠는데(queued) 결과가 남지 않은 세션. 검토 프로세스가 죽었다는 신호다."""
+    queued, finished = set(), set()
+    for e in entries:
+        if e.get("kind") != "session" or not e.get("session"):
+            continue
+        (queued if e.get("status") == "queued" else finished).add(e["session"])
+    return queued - finished

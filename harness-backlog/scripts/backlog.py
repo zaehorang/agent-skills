@@ -106,7 +106,7 @@ def _front_and_sections(item: dict, status: str = "pending") -> tuple[dict, dict
     return front, sections
 
 
-def _verifier(front: dict):
+def _verifier(front: dict, sections_in: dict | None = None):
     def verify(text: str) -> None:
         got, sections = hb.parse_item(text)
         for k, v in front.items():
@@ -115,6 +115,9 @@ def _verifier(front: dict):
         for name in hb.SECTIONS:
             if not sections.get(name):
                 raise hb.BacklogError(f"다시 읽은 항목에 '## {name}'이 비어 있다")
+        for name, body in (sections_in or {}).items():
+            if sections.get(name) != hb.safe_body(body):
+                raise hb.BacklogError(f"다시 읽은 '## {name}' 본문이 입력과 다르다")
     return verify
 
 
@@ -138,7 +141,7 @@ def add_item(project: Path, data) -> Path:
             raise hb.BacklogError(f"relates가 가리키는 항목이 없다: {r}")
     front, sections = _front_and_sections(item)
     path = _free_name(bdir, front["date"], item["slug"])
-    hb.publish(path, hb.render_item(front, sections), verify=_verifier(front))
+    hb.publish(path, hb.render_item(front, sections), verify=_verifier(front, sections))
     return path
 
 
@@ -190,16 +193,30 @@ def merge_items(project: Path, names: list[str], data) -> Path:
         raise hb.BacklogError("입력 최상위는 JSON 객체여야 한다")
     reason = _need_str(data, "merge_reason")
     paths = [_pending_file(project, n) for n in names]
+    originals = {p: p.read_text(encoding="utf-8") for p in paths}
     item_in = {k: v for k, v in data.items() if k != "merge_reason"}
     item_in["relates"] = sorted(set(item_in.get("relates", [])) | set(names))
     new = add_item(project, item_in)
-    done = []
+    moved: list[Path] = []
     try:
+        # 원본에 붙어 있던 재발 근거는 병합된 항목으로 옮긴다
+        recurrences = [hb.parse_item(t)[1].get("재발", "") for t in originals.values()]
+        recurrences = "\n".join(r for r in recurrences if r)
+        if recurrences:
+            front, sections = hb.read_item(new)
+            sections["재발"] = recurrences
+            hb.publish(new, hb.render_item(front, sections), overwrite=True, verify=_verifier(front))
         for p in paths:
             text = f"결과: 병합\n병합된 항목: {new.name}\n왜: {reason}\n날짜: {hb.now():%Y-%m-%d}"
-            done.append(_resolve_to(project, p, "merged", text).name)
-    except hb.BacklogError as e:
-        raise hb.BacklogError(f"병합 도중 실패 ({e}). 새 항목 {new.name}, 옮겨진 원본: {done or '없음'}")
+            moved.append(_resolve_to(project, p, "merged", text))
+    except (hb.BacklogError, OSError) as e:
+        # 되돌린다: 옮긴 원본을 제자리로, 새 항목은 지운다
+        for dest in moved:
+            src = next(p for p in paths if p.name == dest.name)
+            hb.publish(src, originals[src])
+            dest.unlink()
+        new.unlink(missing_ok=True)
+        raise hb.BacklogError(f"병합 도중 실패해 되돌렸다: {e}")
     return new
 
 
@@ -227,10 +244,12 @@ def health(project: Path) -> dict:
     week_ago = hb.now().timestamp() - 7 * 86400
     recent = [e for e in entries if e.get("at") and hb.parse_time(e["at"]).timestamp() >= week_ago]
     sessions = [e for e in recent if e.get("kind") == "session"]
+    unfinished = hb.unfinished_sessions(recent)
     last_weekly = next((e["at"] for e in reversed(entries) if e.get("kind") == "weekly"), None)
     return {
         "reviewed_7d": sum(e.get("status") == "reviewed" for e in sessions),
         "failed_7d": sum(e.get("status") in ("failed", "unavailable") for e in sessions),
+        "unfinished_7d": len(unfinished),
         "last_session_review": next((e["at"] for e in reversed(entries) if e.get("kind") == "session"), None),
         "last_weekly": last_weekly,
     }
@@ -265,6 +284,7 @@ def print_list(data: dict) -> None:
         print("source별: " + ", ".join(f"{k} {v}" for k, v in sorted(data["sources"].items())))
     print(
         f"운영: 최근 7일 검토 {h['reviewed_7d']} · 실패/미실행 {h['failed_7d']}"
+        f" · 검토 미완료 {h['unfinished_7d']}"
         f" · 마지막 세션 검토 {h['last_session_review'] or '없음'}"
         f" · 마지막 주간 {h['last_weekly'] or '없음'}"
     )
