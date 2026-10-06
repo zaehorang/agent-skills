@@ -43,7 +43,7 @@ python3 ~/.claude/skills/ai-readiness-cartography/scripts/score.py <repo-path> \
 - stdout 에 사람이 읽기 좋은 markdown 요약
 
 채점이 자동으로 잡는 것:
-- **A** 핵심 module navigation coverage (CLAUDE.md / AGENTS.md 보유 비율)
+- **A** 핵심 module navigation coverage (AGENTS.md / CLAUDE.md 보유 비율)
 - **B1, B5** conciseness · cross-references
 - **C Q1-Q4** Five-Question framework heuristic + Q5 MEMORY/ADR 존재
 - **D** ARCHITECTURE.md / mermaid / workspace 파일 검출
@@ -94,7 +94,7 @@ LLM 이 JSON 을 받은 뒤 manual 항목을 보강하거나 그대로 차트에
 - B 와 E 는 sub_scores 가 있으니 행 아래 작게 펼쳐서 5/4개 sub-item 의 점수도 보이게
 
 **(d) Structural Map (SVG)**
-대상 레포 구조에 맞게 컬럼 재설정. 카드 안에 `large_files` 의 상위 항목을 hot/warm 바로 표시. CLAUDE.md / AGENTS.md 보유 module 은 accent border + 점등. `ref_broken` 이 있는 module 은 빨간 점 표시.
+대상 레포 구조에 맞게 컬럼 재설정. 카드 안에 `large_files` 의 상위 항목을 hot/warm 바로 표시. AGENTS.md / CLAUDE.md 보유 module 은 accent border + 점등. `ref_broken` 이 있는 module 은 빨간 점 표시.
 
 **(e) Wins / Top ROI Actions 패널**
 - 왼쪽 "Wins": evidence 에서 점수 높은 카테고리 위주, 핵심 강점 5개

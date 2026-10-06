@@ -45,7 +45,7 @@ Navigation Coverage = (AI-context로 안내 가능한 핵심 module 수) / (전�
 
 | Sub | Item | Points | Full-Score Criteria |
 |-----|------|--------|---------------------|
-| B1 | Conciseness *(Auto)*       | 4 | 모든 CLAUDE.md가 25-35 lines 또는 ~1,000 tokens 이하 |
+| B1 | Conciseness *(Auto)*       | 4 | 모든 AGENTS.md가 25-35 lines 또는 ~1,000 tokens 이하 |
 | B2 | Quick Commands *(Heuristic)* | 4 | copy-paste 가능한 명령어 + 사용 시점 명시 (`~~~bash` 블록 + 주변 설명) |
 | B3 | Key Files *(Heuristic)*    | 4 | 실제 수정에 필요한 3-5개 핵심 파일 경로 제시 |
 | B4 | Non-Obvious Patterns *(Heuristic)* | 4 | 실패 유발 hidden rule + 예외가 명시 (`Why:`, `Note:`, `Gotcha`, `Warning`) |
@@ -97,7 +97,7 @@ Navigation Coverage = (AI-context로 안내 가능한 핵심 module 수) / (전�
 **Auto checks:**
 - `docs/architecture.md`, `ARCHITECTURE.md`, `docs/dependency-graph*` 존재
 - `mermaid` / `graphviz` 다이어그램 fence 존재
-- CLAUDE.md 안에 `## Dependencies` / `Cross-module` 섹션
+- AGENTS.md 안에 `## Dependencies` / `Cross-module` 섹션
 - monorepo 의 `pnpm-workspace.yaml` / `turbo.json` / `nx.json` 으로 graph 도출 가능 여부
 
 **Why important.** 한 field change가 6개 subsystem에 ripple 되는 대규모 codebase에서 결정적. 이게 약하면 D를 깎는 것이 옳음.
@@ -110,7 +110,7 @@ Navigation Coverage = (AI-context로 안내 가능한 핵심 module 수) / (전�
 
 | Sub | Item | Points | Full-Score Criteria |
 |-----|------|--------|---------------------|
-| E1 | Reference Accuracy *(Auto)*        | 5 | CLAUDE.md / context file이 언급한 file path · API · command 의 hallucination 0건 |
+| E1 | Reference Accuracy *(Auto)*        | 5 | AGENTS.md / context file이 언급한 file path · API · command 의 hallucination 0건 |
 | E2 | Independent Critic Review *(Manual)* | 4 | 최소 2-3 round 독립 review 또는 checklist (CODEOWNERS / review template / agent critic) |
 | E3 | Task Validation *(Auto)*           | 4 | 변경 유형별 build / test / lint / typecheck / e2e 검증 명령 제공 + 실제 실행 가능 |
 | E4 | Prompt / Workflow Tests *(Heuristic)* | 2 | 대표 AI task query를 실제 테스트 (`evals/`, agent test) |
@@ -136,7 +136,7 @@ Navigation Coverage = (AI-context로 안내 가능한 핵심 module 수) / (전�
 | 10    | 주기적 file path validation, coverage gap detection, critic review, stale reference repair 자동 실행 |
 
 **Auto checks:**
-- 각 CLAUDE.md mtime vs 같은 module 내부 코드 파일 latest mtime 비교 — drift 비율
+- 각 AGENTS.md mtime vs 같은 module 내부 코드 파일 latest mtime 비교 — drift 비율
 - `.github/workflows/*` 에 context / docs validation step 존재
 - pre-commit / husky 에 path validation hook 존재
 - `MEMORY.md` Session Notes 의 가장 최근 entry 날짜
@@ -198,7 +198,7 @@ Priority = Impact / Effort
 
 | Action | Effort | Impact (typical) |
 |--------|--------|------------------|
-| 핵심 module에 CLAUDE.md 추가 | S (30-60 min) | task당 2-5 min × 주 N task |
+| 핵심 module에 AGENTS.md 추가 | S (30-60 min) | task당 2-5 min × 주 N task |
 | god file (>500 lines) 분할 | M (1-3 hr/file) | 토큰 30-50% 절감 + 정확도 ↑ |
 | `## Cross-module deps` 섹션 추가 | S (30 min) | cascade bug 방지 |
 | MEMORY.md / ADR 도입 | M (2-4 hr 초기) | tribal knowledge 보존 (외부화) |

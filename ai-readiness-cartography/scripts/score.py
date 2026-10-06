@@ -190,7 +190,7 @@ def find_all_context_files(repo: Path) -> list[Path]:
 
 
 def find_root_claude(repo: Path) -> Path | None:
-    """루트 진입점 브리핑. 벤더 중립 — CLAUDE.md / AGENTS.md 어느 쪽이든 인정한다."""
+    """루트 진입점 브리핑. 벤더 중립 — AGENTS.md / CLAUDE.md 어느 쪽이든 인정한다."""
     for name in PRIMARY_CONTEXT:
         p = repo / name
         if p.exists():
@@ -236,7 +236,7 @@ def score_a(modules: list[Module], root_claude: Path | None) -> CategoryScore:
         gap_modules = [m.rel for m in modules if not m.has_context]
         findings.append(f"context 미보유 핵심 module {len(gap_modules)}개: {', '.join(gap_modules[:6])}")
     if root_claude is None:
-        findings.append("root CLAUDE.md / AGENTS.md 부재 — 진입점 브리핑 없음")
+        findings.append("root AGENTS.md / CLAUDE.md 부재 — 진입점 브리핑 없음")
 
     return CategoryScore(
         name="AI Navigation & Coverage",
@@ -691,7 +691,7 @@ def derive_actions(report_partial: dict[str, CategoryScore], modules: list[Modul
     missing = [m.rel for m in modules if not m.has_context]
     if missing:
         actions.append(Action(
-            title=f"{len(missing)}개 핵심 module에 CLAUDE.md 신설 ({', '.join(missing[:3])}{'…' if len(missing) > 3 else ''})",
+            title=f"{len(missing)}개 핵심 module에 AGENTS.md 신설 ({', '.join(missing[:3])}{'…' if len(missing) > 3 else ''})",
             category="A",
             effort="S", effort_hours=0.5 * len(missing),
             impact=f"task당 ~3 min × ~5 task/일 절감 → 모듈 1개당 주 1-2 hr 회수",
@@ -702,7 +702,7 @@ def derive_actions(report_partial: dict[str, CategoryScore], modules: list[Modul
     # B — over-long context
     if B.evidence.get("max_lines", 0) > 100:
         actions.append(Action(
-            title="과도한 CLAUDE.md를 25-35 lines로 압축 (compass-not-encyclopedia)",
+            title="과도한 context 파일을 25-35 lines로 압축 (compass-not-encyclopedia)",
             category="B",
             effort="M", effort_hours=2.0,
             impact="agent context 로드 시간 단축 + 핵심 정보 가시성 ↑",
