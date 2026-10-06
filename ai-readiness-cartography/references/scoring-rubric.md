@@ -36,6 +36,7 @@ Navigation Coverage = (AI-context로 안내 가능한 핵심 module 수) / (전�
 - "핵심 module" = repo 루트의 코드 디렉터리 + `apps/*` / `packages/*` / `services/*` 의 각 자식
 - 점수 = `round(coverage × 15)` 후 cap
 - 파일 개수가 아니라 module / workflow coverage로 평가
+- 감점은 없지만 finding·액션으로 경고: 같은 디렉터리에 AGENTS.md와 CLAUDE.md가 함께 있는데 CLAUDE.md가 `@AGENTS.md`를 import하지 않음 → Claude Code는 CLAUDE.md만 읽어 AGENTS.md가 무시된다
 
 ---
 

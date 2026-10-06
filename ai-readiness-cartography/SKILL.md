@@ -44,6 +44,7 @@ python3 ~/.claude/skills/ai-readiness-cartography/scripts/score.py <repo-path> \
 
 채점이 자동으로 잡는 것:
 - **A** 핵심 module navigation coverage (AGENTS.md / CLAUDE.md 보유 비율)
+  - AGENTS.md 옆에 `@AGENTS.md`를 import하지 않는 CLAUDE.md가 있으면 경고한다. Claude Code는 이때 CLAUDE.md만 읽어서 AGENTS.md가 안 보인다
 - **B1, B5** conciseness · cross-references
 - **C Q1-Q4** Five-Question framework heuristic + Q5 MEMORY/ADR 존재
 - **D** ARCHITECTURE.md / mermaid / workspace 파일 검출

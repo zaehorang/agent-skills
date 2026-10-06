@@ -198,6 +198,19 @@ def find_root_claude(repo: Path) -> Path | None:
     return None
 
 
+def find_shadowed_agents(context_files: list[Path], repo: Path) -> list[str]:
+    """AGENTS.md 옆에 CLAUDE.md가 있으면 Claude Code는 CLAUDE.md만 읽는다.
+    CLAUDE.md가 `@AGENTS.md`로 import하지 않으면 AGENTS.md는 Claude에게 안 보인다."""
+    out: list[str] = []
+    for p in context_files:
+        if p.name != "AGENTS.md":
+            continue
+        claude = p.parent / "CLAUDE.md"
+        if claude.exists() and "@AGENTS.md" not in read_text(claude):
+            out.append(str(p.parent.relative_to(repo)) if p.parent != repo else ".")
+    return sorted(out)
+
+
 def count_lines(p: Path) -> int:
     try:
         return len(p.read_text(errors="ignore").splitlines())
@@ -222,7 +235,7 @@ def file_mtime(p: Path) -> float:
 # ----------------------------------------------------------------------------
 # A. Navigation Coverage
 # ----------------------------------------------------------------------------
-def score_a(modules: list[Module], root_claude: Path | None) -> CategoryScore:
+def score_a(modules: list[Module], root_claude: Path | None, shadowed: list[str]) -> CategoryScore:
     total = max(1, len(modules))
     covered = sum(1 for m in modules if m.has_context)
     coverage = covered / total
@@ -237,6 +250,9 @@ def score_a(modules: list[Module], root_claude: Path | None) -> CategoryScore:
         findings.append(f"context 미보유 핵심 module {len(gap_modules)}개: {', '.join(gap_modules[:6])}")
     if root_claude is None:
         findings.append("root AGENTS.md / CLAUDE.md 부재 — 진입점 브리핑 없음")
+    if shadowed:
+        findings.append(f"AGENTS.md가 CLAUDE.md에 가려짐 {len(shadowed)}곳: {', '.join(shadowed[:6])}"
+                        " — Claude Code는 CLAUDE.md만 읽음 (`@AGENTS.md` import 없음)")
 
     return CategoryScore(
         name="AI Navigation & Coverage",
@@ -247,6 +263,7 @@ def score_a(modules: list[Module], root_claude: Path | None) -> CategoryScore:
             "covered_modules": covered,
             "coverage_ratio": round(coverage, 3),
             "root_claude": str(root_claude.name) if root_claude else None,
+            "shadowed_agents_md": shadowed,
         },
         findings=findings,
     )
@@ -699,6 +716,18 @@ def derive_actions(report_partial: dict[str, CategoryScore], modules: list[Modul
             priority=9 / max(0.5, 0.5 * len(missing)),
         ))
 
+    # A — AGENTS.md shadowed by CLAUDE.md
+    shadowed = A.evidence.get("shadowed_agents_md", [])
+    if shadowed:
+        actions.append(Action(
+            title=f"CLAUDE.md에 `@AGENTS.md` import 추가 ({', '.join(shadowed[:3])}{'…' if len(shadowed) > 3 else ''})",
+            category="A",
+            effort="S", effort_hours=0.1 * len(shadowed),
+            impact="Claude Code가 AGENTS.md를 아예 안 읽는 상태 해소 — 다른 에이전트와 같은 context를 봄",
+            impact_score=8,
+            priority=8 / max(0.5, 0.1 * len(shadowed)),
+        ))
+
     # B — over-long context
     if B.evidence.get("max_lines", 0) > 100:
         actions.append(Action(
@@ -832,7 +861,7 @@ def build_report(repo: Path) -> Report:
     large_files = find_large_files(repo, 300)
 
     cats = {
-        "A": score_a(modules, root_claude),
+        "A": score_a(modules, root_claude, find_shadowed_agents(context_files, repo)),
         "B": score_b(context_files, repo),
         "C": score_c(modules, repo),
         "D": score_d(repo, context_files),
