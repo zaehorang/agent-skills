@@ -108,7 +108,9 @@ status: "pending"
 ### "세션 검토해줘"
 
 1. `read_sessions.py list --unreviewed`로 아직 검토하지 않은 세션을 찾는다 (도입 기준 시각 이후).
-   "최근 3개", "이 세션", 세션 ID로 좁힐 수 있다.
+   "최근 3개", "이 세션", 세션 ID로 좁힐 수 있다. 진행 중인 세션도 된다.
+   ledger는 세션마다 **몇 턴까지 검토했는지**를 남긴다. 검토 뒤에 이어진 세션(진행 중 검토, resume)은
+   다시 목록에 오르고, 다음 검토는 그 뒤의 턴만 본다 — 앞부분은 맥락으로만 붙는다.
 2. 세션마다 `review.py --agent <claude|codex> --session <id>`를 실행한다. 다른 쪽 모델이 검토하고, 항목과 ledger가 남는다.
 3. 결과(남긴 항목, 실패)를 보고한다. 검토자 CLI가 없어 `unavailable`이면 사용자에게 묻는다 —
    허락하면 `review.py --prompt-only` 출력을 지침 삼아 직접 검토하고, 후보마다 `backlog.py add`로 남긴 뒤
@@ -142,7 +144,6 @@ status: "pending"
 - Claude Code 문서는 "SessionEnd 훅이 띄운 프로세스는 세션 종료 뒤 살아남지 않는다"고 적지만, 2.1.291(macOS)에서
   `claude -p`와 대화형 `/exit` 모두 실측한 결과 살아남았다. 이 동작이 바뀌어 검토가 죽으면 ledger에 `queued`만 남아
   "검토 미완료"로 보이고, 주간 검토가 그 세션을 다시 검토한다. 늦어질 뿐 빠지지 않는다.
-- 이어서 진행한(resume) 세션은 이미 검토한 세션으로 보고 다시 검토하지 않는다.
 
 - 죽은 규칙(아무도 안 쓰는 규칙)은 세션에서 신호가 나오지 않아 잡지 못한다.
 - 개인 메모리(Claude Code auto memory, Codex memories)는 건드리지 않는다. 그쪽은 개인 선호, backlog는 프로젝트 하네스다.

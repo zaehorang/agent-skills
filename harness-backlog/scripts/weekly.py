@@ -38,11 +38,10 @@ def last_weekly(entries: list[dict]):
 
 def review_missed(project: Path, entries: list[dict]) -> list[dict]:
     base = hb.ledger_baseline(entries)
-    done = hb.reviewed_sessions(entries)
     cutoff = time.time() - SETTLE_SECONDS
     results = []
-    for s in rs.discover(project, base.timestamp() if base else None):
-        if s["key"] in done or hb.parse_time(s["end"]).timestamp() > cutoff:
+    for s in rs.unreviewed(rs.discover(project, base.timestamp() if base else None), entries):
+        if hb.parse_time(s["end"]).timestamp() > cutoff:
             continue
         try:
             results.append(review.review(project, s["agent"], Path(s["path"])))

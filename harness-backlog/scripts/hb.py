@@ -284,13 +284,18 @@ def ledger_baseline(entries: list[dict]) -> dt.datetime | None:
     return None
 
 
-def reviewed_sessions(entries: list[dict]) -> set[str]:
-    """다시 검토하지 않을 세션. 검토 실패나 검토자 부재는 다음에 다시 시도한다."""
-    return {
-        e["session"] for e in entries
-        if e.get("kind") == "session" and e.get("session")
-        and e.get("status") in ("reviewed", "skipped")
-    }
+def reviewed_upto(entries: list[dict]) -> dict[str, float]:
+    """세션마다 어디까지(턴 수) 검토했나. 검토 실패나 검토자 부재는 세지 않는다 — 다음에 다시 시도한다.
+
+    세션은 끝난 뒤에도 이어질 수 있다(진행 중에 요청 검토, resume). 그래서 "검토함"이 아니라
+    "몇 턴까지 검토함"을 남기고, 다음 검토는 그 뒤의 턴만 본다. turns 가 없는 옛 기록은 끝까지 본 것으로 친다.
+    """
+    upto: dict[str, float] = {}
+    for e in entries:
+        if e.get("kind") == "session" and e.get("session") and e.get("status") in ("reviewed", "skipped"):
+            n = e.get("turns", float("inf"))
+            upto[e["session"]] = max(upto.get(e["session"], 0), n)
+    return upto
 
 
 def unfinished_sessions(entries: list[dict]) -> set[str]:

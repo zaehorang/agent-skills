@@ -147,12 +147,12 @@ def build_prompt(project: Path, cfg: dict, session_text: str) -> str:
 CAND_FIELDS = {"slug", "title", "type", "target", "source", "turn", "content", "evidence", "existing", "relates"}
 
 
-def to_items(session: dict, cands: list, reviewer_model: str) -> list[dict]:
+def to_items(session: dict, cands: list, reviewer_model: str, start: int = 0) -> list[dict]:
     items = []
     for c in cands:
         turn = c.get("turn") if isinstance(c, dict) else None
-        if not isinstance(turn, int) or isinstance(turn, bool) or not 0 <= turn < len(session["turns"]):
-            continue  # 근거 지점을 짚지 못한 후보는 버린다
+        if not isinstance(turn, int) or isinstance(turn, bool) or not start <= turn < len(session["turns"]):
+            continue  # 근거 지점을 짚지 못했거나 이미 검토한 부분을 가리키는 후보는 버린다
         item = {k: v for k, v in c.items() if k in CAND_FIELDS - {"turn"}}
         item["ref"] = f"{session['key']}#{rs.ts_at(session, turn)}"
         item["session_model"] = rs.model_at(session, turn)
@@ -180,13 +180,16 @@ def review(project: Path, agent: str, path: Path, *, force: bool = False) -> dic
     session = rs.normalize(agent, path)
     key = session["key"]
     base = {"kind": "session", "session": key, "agent": agent}
-    if not force and key in hb.reviewed_sessions(hb.ledger_read(project)):
+    n = len(session["turns"])
+    done = 0 if force else hb.reviewed_upto(hb.ledger_read(project)).get(key, 0)
+    if done >= n:
         entry = {**base, "status": "already"}
         hb.ledger_append(project, entry)  # 훅의 queued 가 미완료로 남지 않게
         return entry
-    users = [t for t in session["turns"] if t["role"] == "user"]
-    if not users:
-        entry = {**base, "status": "skipped", "note": "사용자 발화 없음"}
+    start = int(done)
+    base.update(turns=n, **({"from": start} if start else {}))
+    if not any(t["role"] == "user" for t in session["turns"][start:]):
+        entry = {**base, "status": "skipped", "note": "새 사용자 발화 없음" if start else "사용자 발화 없음"}
         hb.ledger_append(project, entry)
         return entry
 
@@ -199,7 +202,7 @@ def review(project: Path, agent: str, path: Path, *, force: bool = False) -> dic
     entry = {**base, "session_model": rs.model_at(session, len(session["turns"]) - 1),
              "reviewer": rcfg["cli"], "reviewer_model": label}
     sigs = rs.signals(session, cfg)
-    prompt = build_prompt(project, cfg, rs.render(session, sigs))
+    prompt = build_prompt(project, cfg, rs.render(session, sigs, start=start))
     try:
         out = parse_output(run_reviewer(cfg, rcfg, project, prompt))
     except FileNotFoundError:
@@ -214,7 +217,7 @@ def review(project: Path, agent: str, path: Path, *, force: bool = False) -> dic
     cands = out.get("candidates") or []
     cands = cands if isinstance(cands, list) else []
     limit = cfg["max_candidates"]
-    items = to_items(session, cands[:limit], label)
+    items = to_items(session, cands[:limit], label, start)
     saved, errors = save_items(project, items)
     dropped = out.get("dropped")
     entry.update(status="reviewed", signals=len(sigs), candidates=len(cands),
@@ -243,7 +246,8 @@ def main(argv=None) -> int:
         if a.prompt_only:
             cfg = hb.load_config(project)
             s = rs.normalize(a.agent, path)
-            print(build_prompt(project, cfg, rs.render(s, rs.signals(s, cfg))))
+            start = 0 if a.force else int(min(hb.reviewed_upto(hb.ledger_read(project)).get(s["key"], 0), len(s["turns"])))
+            print(build_prompt(project, cfg, rs.render(s, rs.signals(s, cfg), start=start)))
             return 0
         print(json.dumps(review(project, a.agent, path, force=a.force), ensure_ascii=False))
     except hb.BacklogError as e:

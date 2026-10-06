@@ -295,8 +295,25 @@ def signals(session: dict, cfg: dict | None = None) -> list[dict]:
 LIMITS = {"user": 2000, "assistant": 700, "tool_call": 240, "tool_result": 240}
 
 
-def render(session: dict, sigs: list[dict], max_chars: int = 120_000) -> str:
+def unreviewed(rows: list[dict], entries: list[dict]) -> list[dict]:
+    """검토한 적 없거나, 검토한 뒤로 턴이 늘어난 세션."""
+    upto = hb.reviewed_upto(entries)
+    out = []
+    for r in rows:
+        done = upto.get(r["key"])
+        if done is None:
+            out.append(r)
+        elif done != float("inf"):
+            n = len(normalize(r["agent"], Path(r["path"]))["turns"])
+            if n > done:
+                out.append({**r, "reviewed_turns": int(done), "turns": n})
+    return out
+
+
+def render(session: dict, sigs: list[dict], max_chars: int = 120_000, start: int = 0) -> str:
+    """start 가 있으면 그 앞은 이미 검토한 부분이라 맥락으로만 짧게 보이고, 신호도 start 이후만 보인다."""
     models = list(dict.fromkeys(t["model"] for t in session["turns"] if t.get("model")))
+    sigs = [s for s in sigs if s["turn"] >= start]
     marked = {s["turn"] for s in sigs}
     near = {i for s in sigs for i in range(s["turn"] - 3, s["turn"] + 2)}
     head = [
@@ -306,7 +323,6 @@ def render(session: dict, sigs: list[dict], max_chars: int = 120_000) -> str:
         "## 신호",
         *(f"- 턴 {s['turn']} {s['kind']}: {s['detail']}" for s in sigs),
         "" if sigs else "- 없음",
-        "## 턴  (형식: [번호 역할 시각 | 모델] 내용)",
     ]
 
     def line(t, full: bool) -> str:
@@ -317,13 +333,22 @@ def render(session: dict, sigs: list[dict], max_chars: int = 120_000) -> str:
         mark = " ◀" if t["i"] in marked else ""
         return f"[{t['i']} {tag}{tool}{err} {t.get('ts') or ''} | {t.get('model') or '-'}]{mark} {_clip(t['text'], lim)}"
 
-    body = [line(t, True) for t in session["turns"]]
+    old, new = session["turns"][:start], session["turns"][start:]
+    if old:
+        recent = {t["i"] for t in old[-6:]}
+        ctx = [_clip(line(t, False), 400) for t in old if t["role"] == "user" or t["i"] in recent]
+        head += [f"## 이미 검토한 부분 (턴 0~{start - 1}) — 맥락으로만 본다. 여기서 후보를 내지 않는다",
+                 *ctx, "", f"## 새로 검토할 턴 (턴 {start}부터 — 후보의 turn은 이 범위에서만 고른다)"]
+    else:
+        head.append("## 턴")
+    head.append("(형식: [번호 역할 시각 | 모델] 내용)")
+    body = [line(t, True) for t in new]
     text = "\n".join(head + body)
     if len(text) <= max_chars:
         return text
     # 길면 사용자 발화와 신호 주변만 남긴다.
     kept, skipped = [], 0
-    for t in session["turns"]:
+    for t in new:
         if t["role"] == "user" or t["i"] in near:
             if skipped:
                 kept.append(f"… {skipped}턴 생략")
@@ -398,13 +423,13 @@ def main(argv=None) -> int:
             since = base.timestamp() if base else None
         rows = discover(project, since)
         if a.unreviewed:
-            done = hb.reviewed_sessions(entries)
-            rows = [r for r in rows if r["key"] not in done]
+            rows = unreviewed(rows, entries)
         if a.json:
             print(json.dumps(rows, ensure_ascii=False, indent=2))
         else:
             for r in rows:
-                print(f"{r['end'][:16]}  {r['key']}  {r['cwd']}")
+                more = f"  (턴 {r['reviewed_turns']}까지 검토함 → 지금 {r['turns']}턴)" if "turns" in r else ""
+                print(f"{r['end'][:16]}  {r['key']}  {r['cwd']}{more}")
             print(f"{len(rows)}개 세션")
     except hb.BacklogError as e:
         print(f"실패: {e}", file=sys.stderr)

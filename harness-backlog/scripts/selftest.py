@@ -548,6 +548,44 @@ def t_uninstall_from_copy(e: Env):
     assert "실행 중인 사본" in r.stdout, r.stdout
 
 
+MOCK_INCREMENTAL = r"""
+import json, re, sys
+p = sys.stdin.read().split("<<<SESSION_TRANSCRIPT\n", 1)[1]
+m = re.search(r"새로 검토할 턴 \(턴 (\d+)부터", p)
+start = int(m.group(1)) if m else 0
+assert (start > 0) == ("이미 검토한 부분" in p)
+c = lambda slug, turn: {"slug": slug, "title": slug, "type": "knowledge", "target": "AGENTS.md", "source": "s",
+                        "turn": turn, "content": "c", "evidence": "e", "existing": "없음"}
+print(json.dumps({"candidates": [c(f"new-{start}", start), c(f"old-{start}", 0)]}))
+"""
+
+
+def t_incremental(e: Env):
+    setup_installed(e)
+    path = e.claude_session("cs1")
+    mock = e.mock("inc.py", MOCK_INCREMENTAL)
+    run = lambda: json.loads(e.run("review.py", "--agent", "claude", "--transcript", str(path),
+                                   env={"HARNESS_REVIEWER_CMD": mock}).stdout)
+    first = run()
+    n1 = first["turns"]
+    assert first["status"] == "reviewed" and len(first["saved"]) == 2 and "from" not in first, first
+    assert json.loads(e.run("read_sessions.py", "list", "--unreviewed", "--all", "--json").stdout) == []
+    with path.open("a") as f:  # 세션이 이어진다 (진행 중 검토 뒤, 또는 resume)
+        f.write(json.dumps({"type": "user", "sessionId": "cs1", "cwd": str(e.project), "timestamp": "2026-10-06T02:00:00Z",
+                            "message": {"content": "아니 그건 docs/deploy.md에 있어"}}) + "\n")
+    rows = json.loads(e.run("read_sessions.py", "list", "--unreviewed", "--all", "--json").stdout)
+    assert [r["key"] for r in rows] == ["claude:cs1"] and rows[0]["reviewed_turns"] == n1, rows
+    second = run()
+    assert second["status"] == "reviewed" and second["from"] == n1 and second["invalid"] == 1, second
+    assert second["saved"] == [f"{TODAY}-new-{n1}.md"]  # 앞부분을 가리킨 후보는 버려진다
+    assert run()["status"] == "already"
+    with path.open("a") as f:  # 사용자 발화 없이 이어진 부분은 검토자를 부르지 않는다
+        f.write(json.dumps({"type": "assistant", "sessionId": "cs1", "cwd": str(e.project), "timestamp": "2026-10-06T02:01:00Z",
+                            "message": {"model": "claude-opus-5-5", "content": [{"type": "text", "text": "확인했어요"}]}}) + "\n")
+    third = run()
+    assert third["status"] == "skipped" and third["note"] == "새 사용자 발화 없음", third
+
+
 TESTS = {k[2:]: v for k, v in globals().items() if k.startswith("t_")}
 
 
