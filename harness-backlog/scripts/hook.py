@@ -42,19 +42,25 @@ def main() -> int:
         return 0
     # 결과가 끝내 안 남으면(검토 프로세스가 죽으면) 운영 줄에 "검토 미완료"로 보이게 먼저 적어 둔다.
     # 세션 정리 정책이 바뀌어 프로세스가 죽더라도 주간 검토가 ledger에 결과가 없는 세션을 다시 검토한다.
-    entry = {"at": dt.datetime.now().astimezone().isoformat(timespec="seconds"), "kind": "session",
-             "session": session_key(sys.argv[1], transcript, data), "agent": sys.argv[1], "status": "queued"}
-    with open(bdir / "ledger.jsonl", "a", encoding="utf-8") as f:
-        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-    log_dir = bdir / "logs"
-    log_dir.mkdir(exist_ok=True)
-    with open(log_dir / "review.log", "a") as log:
-        subprocess.Popen(
-            [sys.executable, str(SCRIPTS / "review.py"), "--project", str(PROJECT),
-             "--agent", sys.argv[1], "--transcript", transcript],
-            stdin=subprocess.DEVNULL, stdout=log, stderr=log,
-            start_new_session=True, cwd=PROJECT,
-        )
+    # 기록은 보조다. 실패해도 검토는 반드시 띄운다.
+    try:
+        entry = {"at": dt.datetime.now().astimezone().isoformat(timespec="seconds"), "kind": "session",
+                 "session": session_key(sys.argv[1], transcript, data), "agent": sys.argv[1], "status": "queued"}
+        with open(bdir / "ledger.jsonl", "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        (bdir / "logs").mkdir(exist_ok=True)
+        log = open(bdir / "logs" / "review.log", "a")
+    except OSError:
+        log = subprocess.DEVNULL
+    subprocess.Popen(
+        [sys.executable, str(SCRIPTS / "review.py"), "--project", str(PROJECT),
+         "--agent", sys.argv[1], "--transcript", transcript],
+        stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+        start_new_session=True, cwd=PROJECT,
+    )
     return 0
 
 

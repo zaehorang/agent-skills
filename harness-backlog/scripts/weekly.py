@@ -156,7 +156,12 @@ def run(project: Path, dry_run: bool = False) -> dict:
     since = last_weekly(entries)
     missed = [] if dry_run else review_missed(project, entries)
     rows = rs.discover(project, since.timestamp() if since else None)
-    sessions = [rs.normalize(r["agent"], Path(r["path"])) for r in rows]
+    sessions = []
+    for r in rows:
+        try:
+            sessions.append(rs.normalize(r["agent"], Path(r["path"])))
+        except OSError:
+            continue
     sessions = [s for s in sessions if any(t["role"] == "user" for t in s["turns"])]
     prompt = build_prompt(project, cfg, sessions)
     if dry_run:

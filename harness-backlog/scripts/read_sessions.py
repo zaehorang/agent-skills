@@ -86,10 +86,13 @@ def discover(project: Path, since: float | None = None) -> list[dict]:
     ]
     for agent, paths, meta_fn in sources:
         for p in paths:
-            mtime = p.stat().st_mtime
-            if since is not None and mtime < since:
-                continue
-            meta = meta_fn(p)
+            try:
+                mtime = p.stat().st_mtime
+                if since is not None and mtime < since:
+                    continue
+                meta = meta_fn(p)
+            except OSError:
+                continue  # 사라졌거나 읽을 수 없는 기록은 건너뛴다
             if not meta or not meta.get("id") or not _under(meta.get("cwd"), project):
                 continue
             found.append({"agent": agent, "key": f"{agent}:{meta['id']}", "path": str(p),
@@ -304,7 +307,10 @@ def unreviewed(rows: list[dict], entries: list[dict]) -> list[dict]:
         if done is None:
             out.append(r)
         elif done != float("inf"):
-            n = len(normalize(r["agent"], Path(r["path"]))["turns"])
+            try:
+                n = len(normalize(r["agent"], Path(r["path"]))["turns"])
+            except OSError:
+                continue  # 읽을 수 없는 기록 하나가 전체를 멈추지 않게
             if n > done:
                 out.append({**r, "reviewed_turns": int(done), "turns": n})
     return out

@@ -53,10 +53,9 @@ def reviewer_argv(cfg: dict, rcfg: dict, project: Path, out_file: str) -> list[s
     if not exe:
         return None
     if rcfg["cli"] == "codex":
-        # read-only 샌드박스 + 승인 요청 없음(막히면 실패로 반환) + MCP 비움: 부작용 있는 경로를 닫는다.
+        # read-only 샌드박스 + 승인 요청 없음(막히면 실패로 반환). MCP 서버는 사용자 설정을 그대로 쓴다.
         argv = [exe, "exec", "--ephemeral", "--skip-git-repo-check", "-s", "read-only",
-                "-c", 'approval_policy="never"', "-c", "mcp_servers={}",
-                "-C", str(project), "-o", out_file]
+                "-c", 'approval_policy="never"', "-C", str(project), "-o", out_file]
         if rcfg.get("model"):
             argv += ["-m", rcfg["model"]]
         if rcfg.get("effort"):

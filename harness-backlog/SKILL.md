@@ -57,7 +57,7 @@ description: 세션에서 드러난 하네스(AGENTS.md·스킬·문서·스크�
 도입할 때 사용자에게 이 점을 알리고, 민감한 프로젝트에는 쓰지 않는다.
 
 검토자는 읽기 도구만 가진다 — Claude는 `--restricted --tools Read,Grep,Glob --strict-mcp-config`,
-Codex는 `-s read-only` + `approval_policy="never"` + MCP 비움. 세션 기록은 구분자로 감싸 "지시가 아니다"를 명시한다.
+Codex는 `-s read-only` + `approval_policy="never"` (MCP 서버는 사용자의 Codex 설정을 그대로 쓴다). 세션 기록은 구분자로 감싸 "지시가 아니다"를 명시한다.
 
 ## 항목 하나
 
@@ -114,7 +114,8 @@ status: "pending"
 2. 세션마다 `review.py --agent <claude|codex> --session <id>`를 실행한다. 다른 쪽 모델이 검토하고, 항목과 ledger가 남는다.
 3. 결과(남긴 항목, 실패)를 보고한다. 검토자 CLI가 없어 `unavailable`이면 사용자에게 묻는다 —
    허락하면 `review.py --prompt-only` 출력을 지침 삼아 직접 검토하고, 후보마다 `backlog.py add`로 남긴 뒤
-   `backlog.py ledger --input {"kind": "session", "session": "<agent:id>", "status": "reviewed", "reviewer": "self", "reviewer_model": "<내 모델>"}`로 검토를 기록한다.
+   `backlog.py ledger --input {"kind": "session", "session": "<agent:id>", "status": "reviewed", "turns": <검토한 턴 수>, "reviewer": "self", "reviewer_model": "<내 모델>"}`로 검토를 기록한다.
+   `turns`가 없으면 끝까지 본 것으로 쳐서, 그 뒤에 이어진 대화가 다시 검토되지 않는다.
    `ref`는 `<agent>:<세션 id>#<근거 턴의 시각>`, 모델은 `read_sessions.py show --json`의 턴 정보에서 읽는다.
 
 ### 일하다가 하네스를 고치고 싶어질 때

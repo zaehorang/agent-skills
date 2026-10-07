@@ -487,7 +487,7 @@ print(" ".join(c)); print(" ".join(x))
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True).stdout
     claude, codex = out.splitlines()
     assert "--restricted" in claude and "--tools Read,Grep,Glob" in claude and "--strict-mcp-config" in claude
-    assert "Bash" not in claude and "-s read-only" in codex and "mcp_servers={}" in codex and 'approval_policy="never"' in codex
+    assert "Bash" not in claude and "-s read-only" in codex and 'approval_policy="never"' in codex
 
 
 def t_merge_rollback(e: Env):
@@ -584,6 +584,42 @@ def t_incremental(e: Env):
                             "message": {"model": "claude-opus-5-5", "content": [{"type": "text", "text": "확인했어요"}]}}) + "\n")
     third = run()
     assert third["status"] == "skipped" and third["note"] == "새 사용자 발화 없음", third
+
+
+def t_hook_survives_ledger_failure(e: Env):
+    setup_installed(e)
+    path = e.claude_session("cs1")
+    (e.bdir / "ledger.jsonl").unlink()
+    (e.bdir / "ledger.jsonl").mkdir()  # 기록 실패를 흉내 낸다 (파일 자리에 디렉터리)
+    hook = e.project / ".claude/skills/harness-backlog/scripts/hook.py"
+    marker = e.bdir / "logs" / "review.log"  # 띄워진 review.py 가 남기는 출력 (여기선 ledger 를 못 읽어 오류로 끝난다)
+    mock = e.mock("noop.py", "import sys; sys.stdin.read(); print('{\"candidates\": []}')")
+    payload = json.dumps({"session_id": "cs1", "transcript_path": str(path)})
+    r = subprocess.run([sys.executable, str(hook), "claude"], input=payload, text=True, capture_output=True,
+                       env={**e.env, "HARNESS_REVIEWER_CMD": mock})
+    assert r.returncode == 0
+    for _ in range(100):
+        if marker.exists() and "review.py" in marker.read_text():
+            break
+        time.sleep(0.1)
+    assert "review.py" in marker.read_text(), "기록이 실패해도 검토는 떠야 한다"
+
+
+def t_unreadable_session(e: Env):
+    e.claude_session("cs1")
+    e.bdir.mkdir(parents=True)
+    (e.bdir / "ledger.jsonl").write_text(json.dumps({"kind": "session", "session": "claude:cs1", "status": "reviewed", "turns": 1}) + "\n")
+    p = e.claude_home / "projects" / "-proj" / "cs1.jsonl"
+    code = f"""
+import sys, json; sys.path.insert(0, {str(SCRIPTS)!r})
+import read_sessions as rs, hb
+from pathlib import Path
+rows = rs.discover(Path({str(e.project)!r}))
+Path({str(p)!r}).unlink()  # 목록을 만든 뒤 기록이 사라진다
+print(json.dumps(rs.unreviewed(rows, hb.ledger_read(Path({str(e.project)!r})))))
+"""
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=e.env)
+    assert r.returncode == 0 and json.loads(r.stdout) == [], r.stderr
 
 
 TESTS = {k[2:]: v for k, v in globals().items() if k.startswith("t_")}
