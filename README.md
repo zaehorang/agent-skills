@@ -44,24 +44,6 @@
 
 ---
 
-## 📝 문서화하기
-
-> 코드 안에만 있는 것을 밖으로.
-
-```
-/plugin install spec@horang-skills
-```
-
-### [`behavior-spec-extraction`](./behavior-spec-extraction)
-기존 코드를 읽어 **그 기술을 모르는 사람도 검수할 수 있는 동작 명세**로 역추출한다.
-클래스·메서드 이름과 프레임워크 용어를 명세에서 걷어내고, **밖에서 관측되는 것**만 남긴다 —
-발동 계기 / 들어오는 값 / 밖에 남는 변화 / 실패 경로.
-
-번들된 린터가 구현 누출과 검증 불가능한 Acceptance를 잡고, **에러가 남으면 제출을 막는다.**
-코드만으로 알 수 없는 건 지어내지 않고 `열린 질문`으로 남긴다.
-→ 산출물: 명세 `.md` (코드 블록 없음)
-
----
 
 ## 🔍 진단하기
 
@@ -98,13 +80,24 @@ HTML 16:9 덱을 **대본 → 화면** 순서로 만든다. 장 배열(FLOW)과 
 
 ---
 
-## 🔀 위임하기
 
-> 다른 모델에게, 알맞은 설정으로.
+
+## 🛠 개발하기
+
+> 코드 밖에 남겨야 할 것을 남기고, 일은 알맞은 곳에 넘긴다.
 
 ```
-/plugin install dispatch@horang-skills
+/plugin install dev@horang-skills
 ```
+
+### [`behavior-spec-extraction`](./behavior-spec-extraction)
+기존 코드를 읽어 **그 기술을 모르는 사람도 검수할 수 있는 동작 명세**로 역추출한다.
+클래스·메서드 이름과 프레임워크 용어를 명세에서 걷어내고, **밖에서 관측되는 것**만 남긴다 —
+발동 계기 / 들어오는 값 / 밖에 남는 변화 / 실패 경로.
+
+번들된 린터가 구현 누출과 검증 불가능한 Acceptance를 잡고, **에러가 남으면 제출을 막는다.**
+코드만으로 알 수 없는 건 지어내지 않고 `열린 질문`으로 남긴다.
+→ 산출물: 명세 `.md` (코드 블록 없음)
 
 ### [`herdr-dispatch`](./herdr-dispatch)
 터미널 멀티플렉서로 옆 pane에 일을 넘길 때 **모델 · 추론 강도 · 권한** 세 가지를 의식적으로 고른다.
@@ -114,16 +107,6 @@ HTML 16:9 덱을 **대본 → 화면** 순서로 만든다. 장 배열(FLOW)과 
 테스트·빌드는 **에이전트를 아예 띄우지 않는다.**
 모델 이름이 낡으면 감시하지 않고 **실패한 그 자리에서 표를 고친다.**
 → 산출물: 알맞게 설정된 pane + 선택 근거
-
----
-
-## 🔁 쌓아가기
-
-> 세션에서 드러난 빈틈을, 사람이 확인한 것만 하네스로.
-
-```
-/plugin install harness@horang-skills
-```
 
 ### [`harness-backlog`](./harness-backlog)
 세션이 끝나면 **다른 모델이** 그 세션을 읽고 하네스(AGENTS.md·스킬·문서·권한)의 빈틈을 backlog에 제안으로 남긴다 —
@@ -149,11 +132,9 @@ Claude 세션은 Codex가, Codex 세션은 Claude가 본다. 주간 검토는 �
 | 묶음 | 주제 | 스킬 |
 |---|---|---|
 | `study` | 📖 이해하기 | `mechanism-explainer` · `explorable-world` · `blog-review` |
-| `spec` | 📝 문서화하기 | `behavior-spec-extraction` |
 | `audit` | 🔍 진단하기 | `ai-readiness-cartography` |
 | `present` | 🎤 발표하기 | `presentation-harness` |
-| `dispatch` | 🔀 위임하기 | `herdr-dispatch` |
-| `harness` | 🔁 쌓아가기 | `harness-backlog` |
+| `dev` | 🛠 개발하기 | `behavior-spec-extraction` · `herdr-dispatch` · `harness-backlog` |
 
 설치한 스킬은 `/study:blog-review`처럼 묶음 이름이 앞에 붙는다. 자동 트리거는 그대로 동작한다.
 서드파티 마켓플레이스는 자동 업데이트가 꺼져 있으니 갱신은 `claude plugin update study@horang-skills`로 한다.
