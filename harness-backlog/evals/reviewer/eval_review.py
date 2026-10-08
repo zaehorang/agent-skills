@@ -206,7 +206,7 @@ def grade_run(cands: list[dict], expect: dict, labels: dict, use_judge: bool) ->
 def _tree_hash(root: Path) -> str:
     h = hashlib.sha256()
     for p in sorted(root.rglob("*")):
-        if p.is_file() and "history" not in p.parts:
+        if p.is_file() and ".local" not in p.parts:
             h.update(str(p.relative_to(root)).encode() + p.read_bytes())
     return h.hexdigest()
 

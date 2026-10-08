@@ -8,7 +8,7 @@
    반복 설명 · 에이전트 간 차이 · 반영 후 재발 → 새 pending
    pending 재발 → 기존 항목에 ## 재발
    원인이 같은 pending → 병합
-결과는 전부 history/harness-backlog/ 의 항목으로 남는다. 별도 보고서는 없다.
+결과는 전부 .local/harness-backlog/ 의 항목으로 남는다. 별도 보고서는 없다.
 """
 
 from __future__ import annotations

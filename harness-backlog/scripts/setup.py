@@ -39,8 +39,10 @@ LINK_REL = Path(".agents/skills/harness-backlog")
 LINK_TARGET = "../../.claude/skills/harness-backlog"
 MARK_START, MARK_END = "<!-- harness-backlog:start -->", "<!-- harness-backlog:end -->"
 HOOK_TAG = "harness-backlog/scripts/hook.py"
-CLAUDE_HOOK = 'python3 "$CLAUDE_PROJECT_DIR/.claude/skills/harness-backlog/scripts/hook.py" claude'
-CODEX_HOOK = 'python3 "$(git rev-parse --show-toplevel)/.claude/skills/harness-backlog/scripts/hook.py" codex'
+# worktree에서 열린 세션도 메인 작업 트리의 스크립트를 부른다 (스킬 사본은 메인에만 있으면 된다)
+_MAIN = '$(git -C "{d}" rev-parse --path-format=absolute --git-common-dir)/..'
+CLAUDE_HOOK = 'python3 "' + _MAIN.format(d="$CLAUDE_PROJECT_DIR") + '/.claude/skills/harness-backlog/scripts/hook.py" claude'
+CODEX_HOOK = 'python3 "' + _MAIN.format(d=".") + '/.claude/skills/harness-backlog/scripts/hook.py" codex'
 LABEL = "com.harness-backlog.weekly"
 SKIP_PARTS = {"__pycache__", "evals"}  # 프로젝트에 복사하지 않는 것 (eval은 스킬 개발용)
 MIN_CLAUDE = (2, 1, 277)  # AGENTS.md 를 직접 읽는 최소 버전
@@ -95,6 +97,17 @@ def _has_hook(data: dict) -> bool:
             if HOOK_TAG in str(h.get("command", "")):
                 return True
     return False
+
+
+def _set_hook(data: dict, command: str) -> bool:
+    """예전 형식의 우리 훅 명령을 새 명령으로 바꾼다. 바꿨으면 True."""
+    changed = False
+    for group in (data.get("hooks") or {}).get("SessionEnd") or []:
+        for h in (group or {}).get("hooks") or []:
+            if HOOK_TAG in str(h.get("command", "")) and h.get("command") != command:
+                h["command"] = command
+                changed = True
+    return changed
 
 
 def _add_hook(data: dict, command: str, timeout: int | None) -> dict:
@@ -227,38 +240,54 @@ def plan_install(project: Path, weekly: tuple[int, int, int]) -> list[Step]:
             else:
                 new = old.replace(cur, block)
                 steps.append(Step("AGENTS.md", "AGENTS.md", "modify", "스니펫 갱신",
-                                  lambda: hb.publish(agents, new, overwrite=True), _diff(old, new, "AGENTS.md")))
+                                  lambda a=agents, t=new: hb.publish(a, t, overwrite=True), _diff(old, new, "AGENTS.md")))
         else:
             new = old.rstrip("\n") + "\n\n" + block + "\n"
             steps.append(Step("AGENTS.md", "AGENTS.md", "modify", "스니펫 추가",
-                              lambda: hb.publish(agents, new, overwrite=True), _diff(old, new, "AGENTS.md")))
+                              lambda a=agents, t=new: hb.publish(a, t, overwrite=True), _diff(old, new, "AGENTS.md")))
     else:
         new = "# AGENTS.md\n\n" + block + "\n"
         steps.append(Step("AGENTS.md", "AGENTS.md", "create", "스니펫만 담은 새 파일",
-                          lambda: hb.publish(agents, new), new.splitlines()))
+                          lambda a=agents, t=new: hb.publish(a, t), new.splitlines()))
 
     # 4·5. SessionEnd 훅 (Claude Code · Codex)
     for unit, rel, cmd, timeout in (("claude-settings", ".claude/settings.json", CLAUDE_HOOK, None),
                                     ("codex-hooks", ".codex/hooks.json", CODEX_HOOK, 3)):
         path = project / rel
         data = _read_json(path) if path.exists() else {}
+        new_data = json.loads(json.dumps(data))
         if _has_hook(data):
-            steps.append(Step(unit, rel, "skip", "SessionEnd 훅 있음"))
-            continue
-        new_data = _add_hook(json.loads(json.dumps(data)), cmd, timeout)
-        steps.append(Step(unit, rel, "modify" if path.exists() else "create", "SessionEnd 훅 추가",
+            if not _set_hook(new_data, cmd):
+                steps.append(Step(unit, rel, "skip", "SessionEnd 훅 있음"))
+                continue
+            what = "SessionEnd 훅 명령 갱신"
+        else:
+            new_data = _add_hook(new_data, cmd, timeout)
+            what = "SessionEnd 훅 추가"
+        steps.append(Step(unit, rel, "modify" if path.exists() else "create", what,
                           lambda p=path, d=new_data: _write_json(p, d),
                           _diff(json.dumps(data, indent=2, ensure_ascii=False),
                                 json.dumps(new_data, indent=2, ensure_ascii=False), rel)))
 
-    # 6. 기록 디렉터리: config · .gitignore · ledger 기준 시각
+    # 6. 기록 디렉터리는 git에서 제외한다 (브랜치를 따라다니지 않게)
     bdir = hb.backlog_dir(project)
+    ignored = subprocess.run(["git", "-C", str(project), "check-ignore", "-q", str(bdir / "x.md")]).returncode == 0
+    is_git = hb.git_root(project) is not None
+    if is_git and not ignored:
+        gi = project / ".gitignore"
+        old = gi.read_text(encoding="utf-8") if gi.exists() else ""
+        new = old.rstrip("\n") + ("\n" if old else "") + f"/{hb.BACKLOG_REL}/\n"
+        steps.append(Step("gitignore", ".gitignore", "modify" if gi.exists() else "create",
+                          f"/{hb.BACKLOG_REL}/ 를 git에서 제외",
+                          lambda g=gi, t=new: hb.publish(g, t, overwrite=g.exists()), _diff(old, new, ".gitignore")))
+
+    # 7. 기록 디렉터리: config · ledger 기준 시각
     cfg_path = bdir / "config.json"
     if cfg_path.exists():
         if hb.ledger_baseline(hb.ledger_read(project)):
             steps.append(Step("backlog-dir", str(hb.BACKLOG_REL), "skip", "config.json · 도입 기준 시각 있음"))
         else:
-            steps.append(Step("backlog-dir", "history/harness-backlog/ledger.jsonl", "modify", "도입 기준 시각 기록",
+            steps.append(Step("backlog-dir", f"{hb.BACKLOG_REL}/ledger.jsonl", "modify", "도입 기준 시각 기록",
                               lambda: hb.ledger_append(project, {"kind": "setup", "baseline": hb.iso(hb.now())})))
     else:
         cfg = json.loads(json.dumps(hb.DEFAULT_CONFIG))
@@ -267,17 +296,14 @@ def plan_install(project: Path, weekly: tuple[int, int, int]) -> list[Step]:
 
         def make_backlog():
             _write_json(cfg_path, cfg)
-            gi = bdir / ".gitignore"
-            if not gi.exists():
-                hb.publish(gi, "logs/\n")
             if not hb.ledger_baseline(hb.ledger_read(project)):
                 hb.ledger_append(project, {"kind": "setup", "baseline": hb.iso(hb.now())})
 
         steps.append(Step("backlog-dir", str(hb.BACKLOG_REL), "create",
-                          "config.json · .gitignore(logs/) · ledger.jsonl(도입 기준 시각)", make_backlog,
+                          "config.json · ledger.jsonl(도입 기준 시각)", make_backlog,
                           json.dumps(cfg, ensure_ascii=False, indent=2).splitlines()))
 
-    # 7. 주간 검토가 돌 프로젝트 목록 (전역)
+    # 8. 주간 검토가 돌 프로젝트 목록 (전역)
     if str(project) in _registry():
         steps.append(Step("registry", str(REGISTRY), "skip", "등록됨"))
     else:
@@ -288,7 +314,7 @@ def plan_install(project: Path, weekly: tuple[int, int, int]) -> list[Step]:
         steps.append(Step("registry", str(REGISTRY), "modify" if REGISTRY.exists() else "create",
                           f"+ {project}", register))
 
-    # 8. 주간 launchd 작업 (전역, 하나만)
+    # 9. 주간 launchd 작업 (전역, 하나만)
     plist = _plist(*weekly)
     if PLIST.exists() and PLIST.read_text(encoding="utf-8") == plist:
         steps.append(Step("launchd", str(PLIST), "skip", "설치됨"))
@@ -322,13 +348,13 @@ def plan_uninstall(project: Path) -> list[Step]:
         if MARK_START in old and MARK_END in old:
             new = old[: old.index(MARK_START)].rstrip("\n") + "\n" + old[old.index(MARK_END) + len(MARK_END):].lstrip("\n")
             steps.append(Step("AGENTS.md", "AGENTS.md", "modify", "스니펫 제거",
-                              lambda: hb.publish(agents, new, overwrite=True), _diff(old, new, "AGENTS.md")))
+                              lambda a=agents, t=new: hb.publish(a, t, overwrite=True), _diff(old, new, "AGENTS.md")))
     link = project / LINK_REL
     if link.is_symlink() and os.readlink(link) == LINK_TARGET:
         steps.append(Step("agents-link", str(LINK_REL), "remove", "링크 제거", link.unlink))
     dest = project / SKILL_REL
     if dest.exists() and dest.resolve() != SKILL_DIR:
-        steps.append(Step("skill", str(SKILL_REL), "remove", "스킬 사본 제거", lambda: shutil.rmtree(dest)))
+        steps.append(Step("skill", str(SKILL_REL), "remove", "스킬 사본 제거", lambda d=dest: shutil.rmtree(d)))
     elif dest.exists():
         steps.append(Step("skill", str(SKILL_REL), "skip",
                           "지금 실행 중인 사본이라 지우지 않는다. 다른 위치의 setup.py로 제거하거나 직접 지운다"))
@@ -336,7 +362,7 @@ def plan_uninstall(project: Path) -> list[Step]:
     if str(project) in reg:
         rest = [r for r in reg if r != str(project)]
         steps.append(Step("registry", str(REGISTRY), "modify", f"- {project}",
-                          lambda: hb.publish(REGISTRY, "".join(f"{r}\n" for r in rest), overwrite=True)))
+                          lambda rs=rest: hb.publish(REGISTRY, "".join(f"{r}\n" for r in rs), overwrite=True)))
         if not rest and PLIST.exists():
             def drop_plist():
                 _launchctl("bootout", f"gui/{os.getuid()}", str(PLIST))
@@ -416,7 +442,7 @@ def check(project: Path) -> int:
         except hb.BacklogError as e:
             row(False, str(e))
     cfg_path = hb.backlog_dir(project) / "config.json"
-    row(cfg_path.exists(), "history/harness-backlog/config.json")
+    row(cfg_path.exists(), f"{hb.BACKLOG_REL}/config.json")
     cfg = hb.load_config(project)
     for cli in ("claude", "codex"):
         exe = (cfg.get("cli_paths") or {}).get(cli) or shutil.which(cli)
@@ -461,7 +487,7 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     weekly = a.weekly if isinstance(a.weekly, tuple) else parse_weekly(a.weekly)
     try:
-        project = hb.resolve_project(a.project)
+        project = hb.main_worktree(hb.resolve_project(a.project))  # worktree에서 실행해도 원본 checkout에 설치
         if a.check:
             return check(project)
         steps = plan_uninstall(project) if a.uninstall else plan_install(project, weekly)

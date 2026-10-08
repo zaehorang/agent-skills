@@ -85,7 +85,7 @@ Claude 세션은 Codex가, Codex 세션은 Claude가 본다. 주간 검토는 �
 
 **AI는 제안만 하고 반영은 사람이 한다.** 에이전트가 하네스를 스스로 고치면 오답이 정답 행세를 하기 때문이다.
 반영이든 기각이든 이유가 `_resolved/`에 남아, 같은 제안이 다시 올라오지 않는다.
-→ 산출물: 프로젝트의 `history/harness-backlog/*.md` + 설치 스크립트(훅 · launchd)
+→ 산출물: 프로젝트의 `.local/harness-backlog/*.md` (git 제외) + 설치 스크립트(훅 · launchd)
 
 ---
 

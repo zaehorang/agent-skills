@@ -57,10 +57,21 @@ def _clip(s: str, n: int) -> str:
 
 
 def _under(cwd: str | None, project: Path) -> bool:
+    """cwd 가 이 저장소의 어느 작업 트리 안에 있나."""
     if not cwd:
         return False
+    for root in hb.worktrees(project):
+        try:
+            Path(cwd).resolve().relative_to(root.resolve())
+            return True
+        except ValueError:
+            continue
+    return False
+
+
+def _rel(p: Path, root: Path) -> bool:
     try:
-        Path(cwd).resolve().relative_to(project)
+        p.relative_to(root)
         return True
     except ValueError:
         return False
@@ -88,6 +99,8 @@ def _codex_meta(path: Path) -> dict | None:
 
 
 def discover(project: Path, since: float | None = None) -> list[dict]:
+    roots = [r.resolve() for r in hb.worktrees(project)]
+    under = lambda cwd: bool(cwd) and any(_rel(Path(cwd).resolve(), r) for r in roots)
     found = []
     sources = [
         ("claude", (CLAUDE_HOME / "projects").glob("*/*.jsonl"), _claude_meta),
@@ -102,7 +115,7 @@ def discover(project: Path, since: float | None = None) -> list[dict]:
                 meta = meta_fn(p)
             except OSError:
                 continue  # 사라졌거나 읽을 수 없는 기록은 건너뛴다
-            if not meta or not meta.get("id") or not _under(meta.get("cwd"), project):
+            if not meta or not meta.get("id") or not under(meta.get("cwd")):
                 continue
             found.append({"agent": agent, "key": f"{agent}:{meta['id']}", "path": str(p),
                           "end": hb.iso(hb.dt.datetime.fromtimestamp(mtime).astimezone()), **meta})

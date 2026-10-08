@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
-PROJECT = SCRIPTS.parents[3]  # <project>/.claude/skills/harness-backlog/scripts
+PROJECT = SCRIPTS.parents[3]  # <메인 작업 트리>/.claude/skills/harness-backlog/scripts
 
 
 def session_key(agent: str, transcript: str, data: dict) -> str:
@@ -37,7 +37,9 @@ def main() -> int:
     except (json.JSONDecodeError, ValueError):
         return 0
     transcript = data.get("transcript_path")
-    bdir = PROJECT / "history" / "harness-backlog"
+    sys.path.insert(0, str(SCRIPTS))
+    import hb
+    bdir = hb.backlog_dir(PROJECT)
     if not transcript or not (bdir / "config.json").exists():
         return 0
     # 결과가 끝내 안 남으면(검토 프로세스가 죽으면) 운영 줄에 "검토 미완료"로 보이게 먼저 적어 둔다.

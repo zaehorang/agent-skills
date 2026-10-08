@@ -73,7 +73,7 @@ class Env:
 
     @property
     def bdir(self) -> Path:
-        return self.project / "history" / "harness-backlog"
+        return self.project / ".local" / "harness-backlog"
 
     def run(self, script: str, *args: str, stdin: str | None = None, env: dict | None = None, cwd=None):
         return subprocess.run([sys.executable, str(SCRIPTS / script), *args], input=stdin,
@@ -211,7 +211,7 @@ def t_non_git(e: Env):
     r = e.run("backlog.py", "add", "--input", e.write_json("i.json", item()), cwd=plain)
     assert r.returncode == 1 and "--project" in r.stderr
     r = e.run("backlog.py", "--project", str(plain), "add", "--input", e.write_json("i.json", item()))
-    assert r.returncode == 0 and (plain / "history/harness-backlog").is_dir()
+    assert r.returncode == 0 and (plain / ".local/harness-backlog").is_dir()
 
 
 def t_list_and_resolve(e: Env):
@@ -390,8 +390,8 @@ def t_setup_flow(e: Env):
     assert not (e.project / ".claude/skills/harness-backlog/evals").exists()  # eval은 복사하지 않는다
     hooks = json.loads((e.project / ".codex/hooks.json").read_text())
     h = hooks["hooks"]["SessionEnd"][0]["hooks"][0]
-    assert h["timeout"] == 3 and "git rev-parse --show-toplevel" in h["command"]
-    assert (e.bdir / "config.json").exists() and "logs/" in (e.bdir / ".gitignore").read_text()
+    assert h["timeout"] == 3 and "--git-common-dir" in h["command"]
+    assert (e.bdir / "config.json").exists() and "/.local/harness-backlog/" in (e.project / ".gitignore").read_text()
     assert str(e.project) in (e.root / "config/projects").read_text()
     plist = (e.root / "LaunchAgents/com.harness-backlog.weekly.plist").read_text()
     assert "<integer>1</integer>" in plist and "<integer>9</integer>" in plist
@@ -680,6 +680,36 @@ def t_eval_grading(e: Env):
     r = run([0])
     assert r.returncode == 1 and "실패  mini" in r.stdout, r.stdout
     assert len(list((e.root / "results").glob("*.json"))) == 3
+
+
+def t_worktree(e: Env):
+    """worktree에서 열린 세션도 찾고, 기록은 메인 작업 트리 한 곳에 모인다. 훅도 worktree에서 메인의 스크립트를 부른다."""
+    git = lambda *a, cwd=e.project: subprocess.run(["git", *a], cwd=cwd, capture_output=True, text=True, check=True)
+    (e.project / "README.md").write_text("x\n")
+    git("add", "README.md"); git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init")
+    setup_installed(e)
+    git("add", ".claude/settings.json", ".codex/hooks.json", "AGENTS.md", ".gitignore")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "hooks")
+    wt = e.root / "wt"
+    git("worktree", "add", "-q", str(wt), "-b", "feature")
+    assert not (wt / ".claude/skills/harness-backlog").exists()  # 스킬 사본은 메인에만
+    path = e.claude_session("wt1", cwd=wt)
+    keys = [r["key"] for r in json.loads(e.run("read_sessions.py", "list", "--all", "--json", cwd=wt).stdout)]
+    assert "claude:wt1" in keys, keys
+    # worktree의 settings.json 훅 명령을 그 worktree를 CLAUDE_PROJECT_DIR 로 해서 실제 셸로 실행한다
+    cmd = json.loads((wt / ".claude/settings.json").read_text())["hooks"]["SessionEnd"][0]["hooks"][0]["command"]
+    payload = json.dumps({"session_id": "wt1", "transcript_path": str(path)})
+    mock = e.mock("m.py", MOCK_REVIEW)
+    r = subprocess.run(["/bin/bash", "-c", cmd], input=payload, text=True, capture_output=True, cwd=wt,
+                       env={**e.env, "CLAUDE_PROJECT_DIR": str(wt), "HARNESS_REVIEWER_CMD": mock})
+    assert r.returncode == 0, r.stderr
+    for _ in range(100):
+        if list(e.bdir.glob("*.md")):
+            break
+        time.sleep(0.1)
+    assert list(e.bdir.glob("*.md")), "메인 작업 트리의 backlog에 항목이 생겨야 한다"
+    assert not (wt / ".local").exists()
+    assert ".local" not in git("status", "--porcelain", "--untracked-files=all", cwd=e.project).stdout, "기록은 git에 잡히지 않아야 한다"
 
 
 TESTS = {k[2:]: v for k, v in globals().items() if k.startswith("t_")}

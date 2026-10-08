@@ -16,7 +16,7 @@ description: 세션에서 드러난 하네스(AGENTS.md·스킬·문서·스크�
 "세션 검토해줘" ──────────────────────────┤
 주간 launchd ─ 놓친 세션 검토 + 여러 세션 종합 ─┤
                                             ▼
-                     history/harness-backlog/*.md   (pending — 아직 하네스가 아니다)
+                     .local/harness-backlog/*.md   (pending — 아직 하네스가 아니다)
                                             ▼
 "backlog 보자" → 항목별 반영 / 기각 / 보류
    반영 → target 수정 → _resolved/ (applied + 왜 + 바꾼 곳)
@@ -32,13 +32,19 @@ description: 세션에서 드러난 하네스(AGENTS.md·스킬·문서·스크�
 ├── .agents/skills/harness-backlog →  위 본체를 가리키는 링크 (Codex용)
 ├── .claude/settings.json             SessionEnd 훅
 ├── .codex/hooks.json                 SessionEnd 훅
-└── history/harness-backlog/
+└── .local/harness-backlog/           git에서 제외 (.gitignore)
     ├── YYYY-MM-DD-<slug>.md          pending 항목
     ├── _resolved/                    applied · rejected · merged
     ├── config.json                   검토자 모델 등 프로젝트 값
     └── ledger.jsonl                  검토 기록 (어떤 세션을 누가 봤나)
 전역: ~/.config/harness-backlog/projects (주간 검토 대상) · launchd 작업 하나
 ```
+
+**기록은 저장소마다 한 곳에 모인다.** backlog는 코드와 함께 브랜치를 따라가면 안 되는 데이터라서,
+메인 작업 트리(원본 checkout)의 `.local/harness-backlog/`에 두고 git에서 뺀다. 어느 브랜치나 worktree에서
+일한 세션도 이곳에 기록되고, 세션 찾기도 저장소의 모든 worktree를 본다.
+스킬 사본은 메인 작업 트리에만 있으면 된다. 훅 설정(`.claude/settings.json`, `.codex/hooks.json`)은 커밋해야
+worktree에도 들어간다 — 훅 명령이 메인 작업 트리의 스크립트를 찾아 부른다.
 
 | 프로젝트가 정하는 것 (`config.json`) | 이 스킬의 기본값 |
 |---|---|

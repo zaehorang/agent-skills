@@ -13,7 +13,9 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-BACKLOG_REL = Path("history/harness-backlog")
+# 기록은 저장소마다 하나: 메인 작업 트리의 .local/ 아래, git에서 제외한다.
+# 브랜치를 바꾸거나 worktree에서 일해도 같은 곳에 모인다.
+BACKLOG_REL = Path(".local/harness-backlog")
 RESOLVED = "_resolved"
 TYPES = ("knowledge", "correction", "guard", "structure", "removal")
 RESOLVED_STATUSES = ("applied", "rejected", "merged")
@@ -86,8 +88,30 @@ def resolve_project(project: str | None) -> Path:
     return root
 
 
+def _git(project: Path, *args: str) -> str | None:
+    try:
+        return subprocess.run(["git", "-C", str(project), *args], capture_output=True, text=True, check=True).stdout.strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+
+
+def main_worktree(project: Path) -> Path:
+    """worktree 안에서도 원본 checkout 을 돌려준다. git 저장소가 아니면 그대로."""
+    common = _git(project, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    if common and Path(common).name == ".git":
+        return Path(common).parent
+    return project
+
+
+def worktrees(project: Path) -> list[Path]:
+    """같은 저장소의 모든 작업 트리. 세션은 이 중 어디에서든 열릴 수 있다."""
+    out = _git(project, "worktree", "list", "--porcelain") or ""
+    paths = [Path(line[9:]) for line in out.splitlines() if line.startswith("worktree ")]
+    return paths or [project]
+
+
 def backlog_dir(project: Path) -> Path:
-    return project / BACKLOG_REL
+    return main_worktree(project) / BACKLOG_REL
 
 
 def _merge(base: dict, over: dict) -> dict:
