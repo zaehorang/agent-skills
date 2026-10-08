@@ -1,0 +1,10 @@
+{
+  "must": [
+    {
+      "at": "annoyed",
+      "type": "removal",
+      "about": "'읽기 전에 매번 확인' 규칙이 과하다 — 읽기는 확인 없이, 수정만 확인하도록 줄이기"
+    }
+  ],
+  "max_candidates": 2
+}

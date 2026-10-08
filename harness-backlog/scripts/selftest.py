@@ -387,6 +387,7 @@ def t_setup_flow(e: Env):
     setup_installed(e)
     link = e.project / ".agents/skills/harness-backlog"
     assert link.is_symlink() and (link / "SKILL.md").exists()
+    assert not (e.project / ".claude/skills/harness-backlog/evals").exists()  # eval은 복사하지 않는다
     hooks = json.loads((e.project / ".codex/hooks.json").read_text())
     h = hooks["hooks"]["SessionEnd"][0]["hooks"][0]
     assert h["timeout"] == 3 and "git rev-parse --show-toplevel" in h["command"]
@@ -654,6 +655,31 @@ def t_real_format_quirks(e: Env):
         {"type": "user", "sessionId": "cmp", "cwd": str(e.project), "message": {"content": "진짜 요청"}}]) + "\n")
     data = json.loads(e.run("read_sessions.py", "show", "--agent", "claude", "--session", "cmp", "--json").stdout)
     assert [t["text"] for t in data["session"]["turns"] if t["role"] == "user"] == ["진짜 요청"]
+
+
+def t_eval_grading(e: Env):
+    """eval 채점기: 대본 변환 · 라벨 · 통과/실패 판정을 모의 검토자로 확인한다."""
+    cases = e.root / "cases"
+    d = cases / "mini"
+    (d / "project").mkdir(parents=True)
+    (d / "project" / "AGENTS.md").write_text("# AGENTS.md\n")
+    (d / "session.md").write_text("agent: claude\nmodel: m\n---\nuser: 해줘\ncall Bash: ls\nresult: ok\n"
+                                  "user @fix: 그거 아니야\nuser @change: 역시 B로\n")
+    (d / "expect.json").write_text(json.dumps({"must": [{"at": "fix", "type": "guard"}], "must_not": [{"at": "change"}]}))
+    ev = SCRIPTS.parent / "evals" / "reviewer" / "eval_review.py"
+    def run(turns):
+        cands = [{"slug": "a", "title": "t", "type": "guard", "turn": t, "content": "c"} for t in turns]
+        mock = e.mock("m.py", f"import sys, json; sys.stdin.read(); print(json.dumps({{'candidates': {cands!r}}}))")
+        return subprocess.run([sys.executable, str(ev), "--cases-dir", str(cases), "--results-dir", str(e.root / "results"),
+                               "--runs", "1", "--no-judge"],
+                              capture_output=True, text=True, env={**e.env, "HARNESS_REVIEWER_CMD": mock})
+    r = run([3])
+    assert r.returncode == 0 and "통과  mini" in r.stdout, r.stdout + r.stderr
+    r = run([3, 4])
+    assert r.returncode == 1 and "must_not" in r.stdout, r.stdout
+    r = run([0])
+    assert r.returncode == 1 and "실패  mini" in r.stdout, r.stdout
+    assert len(list((e.root / "results").glob("*.json"))) == 3
 
 
 TESTS = {k[2:]: v for k, v in globals().items() if k.startswith("t_")}

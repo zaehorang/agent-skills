@@ -42,6 +42,7 @@ HOOK_TAG = "harness-backlog/scripts/hook.py"
 CLAUDE_HOOK = 'python3 "$CLAUDE_PROJECT_DIR/.claude/skills/harness-backlog/scripts/hook.py" claude'
 CODEX_HOOK = 'python3 "$(git rev-parse --show-toplevel)/.claude/skills/harness-backlog/scripts/hook.py" codex'
 LABEL = "com.harness-backlog.weekly"
+SKIP_PARTS = {"__pycache__", "evals"}  # 프로젝트에 복사하지 않는 것 (eval은 스킬 개발용)
 MIN_CLAUDE = (2, 1, 277)  # AGENTS.md 를 직접 읽는 최소 버전
 DAYS = {"sun": 0, "mon": 1, "tue": 2, "wed": 3, "thu": 4, "fri": 5, "sat": 6}
 
@@ -120,7 +121,7 @@ def _drop_hook(data: dict) -> dict:
 
 def _skill_files(root: Path) -> dict[str, Path]:
     return {str(p.relative_to(root)): p for p in root.rglob("*")
-            if p.is_file() and "__pycache__" not in p.parts and p.name != ".DS_Store"}
+            if p.is_file() and not set(p.relative_to(root).parts) & SKIP_PARTS and p.name != ".DS_Store"}
 
 
 def _codex_default_model() -> str:
@@ -193,7 +194,7 @@ def plan_install(project: Path, weekly: tuple[int, int, int]) -> list[Step]:
         def copy_skill():
             if dest.exists():
                 shutil.rmtree(dest)
-            shutil.copytree(SKILL_DIR, dest, ignore=shutil.ignore_patterns("__pycache__", ".DS_Store"))
+            shutil.copytree(SKILL_DIR, dest, ignore=shutil.ignore_patterns(*SKIP_PARTS, ".DS_Store"))
 
         if not dest.exists():
             steps.append(Step("skill", str(SKILL_REL), "create", f"파일 {len(src)}개 복사", copy_skill))
