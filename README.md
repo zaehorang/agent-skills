@@ -1,6 +1,6 @@
 # horang-skills
 
-**Agent Skills** 모음. 역할별 묶음을 Claude Code 플러그인으로 깔거나, 필요한 폴더만 가져다 쓰면 된다.
+**Agent Skills** 모음. 주제별로 묶여 있고, 각 주제는 Claude Code 플러그인 하나로 설치하거나 폴더만 복사해 쓴다.
 
 [Agent Skills](https://agentskills.io)는 에이전트에게 절차적 지식을 넘기는 오픈 포맷이다.
 폴더 하나 = 스킬 하나이고, 안의 `SKILL.md`가 전부다. Claude Code · Codex · Cursor · Gemini CLI 등이 같은 포맷을 읽는다.
@@ -13,7 +13,9 @@
 
 > 남이 만든 것을 내가 아는 것으로.
 
-이 중 `mechanism-explainer`와 `explorable-world`는 플러그인 묶음 **`study`**로 한 번에 설치할 수 있다 → [설치](#설치).
+```
+/plugin install study@horang-skills
+```
 
 ### [`mechanism-explainer`](./mechanism-explainer)
 시스템이 **내부적으로 어떻게 돌아가는지**를 단계별로 따라가는 HTML로 만든다.
@@ -46,6 +48,10 @@
 
 > 코드 안에만 있는 것을 밖으로.
 
+```
+/plugin install spec@horang-skills
+```
+
 ### [`behavior-spec-extraction`](./behavior-spec-extraction)
 기존 코드를 읽어 **그 기술을 모르는 사람도 검수할 수 있는 동작 명세**로 역추출한다.
 클래스·메서드 이름과 프레임워크 용어를 명세에서 걷어내고, **밖에서 관측되는 것**만 남긴다 —
@@ -61,6 +67,10 @@
 
 > 지금 상태가 어떤지 숫자로.
 
+```
+/plugin install audit@horang-skills
+```
+
 ### [`ai-readiness-cartography`](./ai-readiness-cartography)
 레포가 **코딩 에이전트에게 얼마나 친화적인지** 100점 루브릭 7개 카테고리로 채점하고,
 HTML 대시보드 + ROI 순으로 정렬된 액션 리스트를 만든다.
@@ -71,9 +81,30 @@ ROI는 정성적 형용사를 금지한다("효율 ↑" ✗ / "task당 ~3분 × 
 
 ---
 
+## 🎤 발표하기
+
+> 슬라이드보다 대본이 먼저.
+
+```
+/plugin install present@horang-skills
+```
+
+### [`presentation-harness`](./presentation-harness)
+HTML 16:9 덱을 **대본 → 화면** 순서로 만든다. 장 배열(FLOW)과 장 안의 전개(SCRIPT)를 먼저 승인받고,
+화면에는 "말의 근거"만 옮긴다. 화면을 먼저 만들면 하고 싶은 말이 레이아웃에 끌려가기 때문이다.
+
+기계 검사와 관점별 리뷰를 거쳐야 PDF로 내보낸다.
+→ 산출물: `FLOW.md` + `SCRIPT.md` + `presentation.html` (+ PDF)
+
+---
+
 ## 🔀 위임하기
 
 > 다른 모델에게, 알맞은 설정으로.
+
+```
+/plugin install dispatch@horang-skills
+```
 
 ### [`herdr-dispatch`](./herdr-dispatch)
 터미널 멀티플렉서로 옆 pane에 일을 넘길 때 **모델 · 추론 강도 · 권한** 세 가지를 의식적으로 고른다.
@@ -90,6 +121,10 @@ ROI는 정성적 형용사를 금지한다("효율 ↑" ✗ / "task당 ~3분 × 
 
 > 세션에서 드러난 빈틈을, 사람이 확인한 것만 하네스로.
 
+```
+/plugin install harness@horang-skills
+```
+
 ### [`harness-backlog`](./harness-backlog)
 세션이 끝나면 **다른 모델이** 그 세션을 읽고 하네스(AGENTS.md·스킬·문서·권한)의 빈틈을 backlog에 제안으로 남긴다 —
 Claude 세션은 Codex가, Codex 세션은 Claude가 본다. 주간 검토는 여러 세션에 걸친 반복 설명·재발·에이전트 간 차이를 찾는다.
@@ -102,20 +137,25 @@ Claude 세션은 Codex가, Codex 세션은 Claude가 본다. 주간 검토는 �
 
 ## 설치
 
-두 가지 길이 있다. Claude Code라면 역할별 묶음을 플러그인으로 깔고, 그 외 에이전트나 묶음에 없는 스킬은 폴더를 복사한다.
+### Claude Code 플러그인으로
 
-### Claude Code 플러그인으로 (역할별 묶음)
+마켓플레이스를 한 번 등록하면, 위 각 주제의 설치 명령이 그대로 먹는다.
 
 ```
 /plugin marketplace add zaehorang/horang-skills
 /plugin install study@horang-skills
 ```
 
-| 묶음 | 들어 있는 스킬 | 호출 이름 |
+| 묶음 | 주제 | 스킬 |
 |---|---|---|
-| `study` | `mechanism-explainer` · `explorable-world` | `/study:mechanism-explainer` 등 |
+| `study` | 📖 이해하기 | `mechanism-explainer` · `explorable-world` · `blog-review` |
+| `spec` | 📝 문서화하기 | `behavior-spec-extraction` |
+| `audit` | 🔍 진단하기 | `ai-readiness-cartography` |
+| `present` | 🎤 발표하기 | `presentation-harness` |
+| `dispatch` | 🔀 위임하기 | `herdr-dispatch` |
+| `harness` | 🔁 쌓아가기 | `harness-backlog` |
 
-묶음에 없는 스킬은 아래처럼 폴더를 복사해 쓴다.
+설치한 스킬은 `/study:blog-review`처럼 묶음 이름이 앞에 붙는다. 자동 트리거는 그대로 동작한다.
 서드파티 마켓플레이스는 자동 업데이트가 꺼져 있으니 갱신은 `claude plugin update study@horang-skills`로 한다.
 
 ### 폴더 복사로 (모든 에이전트)
