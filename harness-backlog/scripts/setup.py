@@ -5,7 +5,7 @@
   setup.py [--project P] --apply              적용한다
   setup.py [--project P] --apply --create all 없는 파일도 만든다 (단위를 골라도 된다)
   setup.py [--project P] --check              설치 상태와 운영 상태를 점검한다
-  setup.py [--project P] --uninstall [--apply]  훅·등록·스킬을 뺀다. 기록(history/)은 남긴다
+  setup.py [--project P] --uninstall [--apply]  훅·등록·스킬을 뺀다. 기록(.local/harness-backlog/)은 남긴다
 
 없는 파일은 묻고 만든다. 터미널이면 단위마다 y/N 을 묻고, 아니면 --create 로 받은 단위만 만든다.
 이미 있는 설정 파일은 덮지 않고 우리 항목만 합친다. 여러 번 돌려도 결과가 같다.
@@ -43,6 +43,12 @@ HOOK_TAG = "harness-backlog/scripts/hook.py"
 _MAIN = '$(git -C "{d}" rev-parse --path-format=absolute --git-common-dir)/..'
 CLAUDE_HOOK = 'python3 "' + _MAIN.format(d="$CLAUDE_PROJECT_DIR") + '/.claude/skills/harness-backlog/scripts/hook.py" claude'
 CODEX_HOOK = 'python3 "' + _MAIN.format(d=".") + '/.claude/skills/harness-backlog/scripts/hook.py" codex'
+# git에서 제외할 것: (.gitignore 줄, check-ignore 에 넘길 경로). 링크는 디렉터리 패턴(끝 슬래시)에 안 잡힌다
+IGNORE_ENTRIES = (
+    (f"/{hb.BACKLOG_REL}/", f"{hb.BACKLOG_REL}/x.md"),
+    (f"/{SKILL_REL}/", f"{SKILL_REL}/SKILL.md"),
+    (f"/{LINK_REL}", f"{LINK_REL}"),
+)
 LABEL = "com.harness-backlog.weekly"
 SKIP_PARTS = {"__pycache__", "evals"}  # 프로젝트에 복사하지 않는 것 (eval은 스킬 개발용)
 MIN_CLAUDE = (2, 1, 277)  # AGENTS.md 를 직접 읽는 최소 버전
@@ -192,11 +198,12 @@ def _registry() -> list[str]:
 
 # ---------------------------------------------------------------- 설치 계획
 
-def plan_install(project: Path, weekly: tuple[int, int, int]) -> list[Step]:
+def plan_install(checkout: Path, main: Path, weekly: tuple[int, int, int]) -> list[Step]:
+    """checkout(실행한 작업 트리)에는 커밋할 파일을, main(원본 checkout)에는 커밋하지 않는 것을 쓴다."""
     steps: list[Step] = []
 
-    # 1. 스킬 본체
-    dest = project / SKILL_REL
+    # 1. 스킬 본체 (main)
+    dest = main / SKILL_REL
     if dest.resolve() == SKILL_DIR:
         steps.append(Step("skill", str(SKILL_REL), "skip", "이 스크립트가 이미 프로젝트 안의 사본이다"))
     else:
@@ -217,8 +224,8 @@ def plan_install(project: Path, weekly: tuple[int, int, int]) -> list[Step]:
         else:
             steps.append(Step("skill", str(SKILL_REL), "skip", "최신"))
 
-    # 2. Codex가 읽는 위치에 링크
-    link = project / LINK_REL
+    # 2. Codex가 읽는 위치에 링크 (main)
+    link = main / LINK_REL
     if link.is_symlink() and os.readlink(link) == LINK_TARGET:
         steps.append(Step("agents-link", str(LINK_REL), "skip", "링크 있음"))
     elif link.exists() or link.is_symlink():
@@ -229,8 +236,8 @@ def plan_install(project: Path, weekly: tuple[int, int, int]) -> list[Step]:
             os.symlink(LINK_TARGET, link)
         steps.append(Step("agents-link", str(LINK_REL), "create", f"→ {LINK_TARGET}", make_link))
 
-    # 3. AGENTS.md 스니펫
-    agents, block = project / "AGENTS.md", _snippet()
+    # 3. AGENTS.md 스니펫 (checkout)
+    agents, block = checkout / "AGENTS.md", _snippet()
     if agents.exists():
         old = agents.read_text(encoding="utf-8")
         if MARK_START in old and MARK_END in old:
@@ -253,7 +260,7 @@ def plan_install(project: Path, weekly: tuple[int, int, int]) -> list[Step]:
     # 4·5. SessionEnd 훅 (Claude Code · Codex)
     for unit, rel, cmd, timeout in (("claude-settings", ".claude/settings.json", CLAUDE_HOOK, None),
                                     ("codex-hooks", ".codex/hooks.json", CODEX_HOOK, 3)):
-        path = project / rel
+        path = checkout / rel
         data = _read_json(path) if path.exists() else {}
         new_data = json.loads(json.dumps(data))
         if _has_hook(data):
@@ -269,26 +276,27 @@ def plan_install(project: Path, weekly: tuple[int, int, int]) -> list[Step]:
                           _diff(json.dumps(data, indent=2, ensure_ascii=False),
                                 json.dumps(new_data, indent=2, ensure_ascii=False), rel)))
 
-    # 6. 기록 디렉터리는 git에서 제외한다 (브랜치를 따라다니지 않게)
-    bdir = hb.backlog_dir(project)
-    ignored = subprocess.run(["git", "-C", str(project), "check-ignore", "-q", str(bdir / "x.md")]).returncode == 0
-    is_git = hb.git_root(project) is not None
-    if is_git and not ignored:
-        gi = project / ".gitignore"
-        old = gi.read_text(encoding="utf-8") if gi.exists() else ""
-        new = old.rstrip("\n") + ("\n" if old else "") + f"/{hb.BACKLOG_REL}/\n"
-        steps.append(Step("gitignore", ".gitignore", "modify" if gi.exists() else "create",
-                          f"/{hb.BACKLOG_REL}/ 를 git에서 제외",
-                          lambda g=gi, t=new: hb.publish(g, t, overwrite=g.exists()), _diff(old, new, ".gitignore")))
+    # 6. 스킬 사본 · 링크 · 기록은 git에서 제외한다 (주 디렉터리에만 두고 브랜치를 따라다니지 않게)
+    if hb.git_root(checkout) is not None:
+        missing = [pat for pat, probe in IGNORE_ENTRIES if subprocess.run(
+            ["git", "-C", str(checkout), "check-ignore", "-q", probe], capture_output=True).returncode != 0]
+        if missing:
+            gi = checkout / ".gitignore"
+            old = gi.read_text(encoding="utf-8") if gi.exists() else ""
+            new = old.rstrip("\n") + ("\n" if old else "") + "".join(f"{m}\n" for m in missing)
+            steps.append(Step("gitignore", ".gitignore", "modify" if gi.exists() else "create",
+                              f"{', '.join(missing)} 를 git에서 제외",
+                              lambda g=gi, t=new: hb.publish(g, t, overwrite=g.exists()), _diff(old, new, ".gitignore")))
 
     # 7. 기록 디렉터리: config · ledger 기준 시각
+    bdir = hb.backlog_dir(main)
     cfg_path = bdir / "config.json"
     if cfg_path.exists():
-        if hb.ledger_baseline(hb.ledger_read(project)):
+        if hb.ledger_baseline(hb.ledger_read(main)):
             steps.append(Step("backlog-dir", str(hb.BACKLOG_REL), "skip", "config.json · 도입 기준 시각 있음"))
         else:
             steps.append(Step("backlog-dir", f"{hb.BACKLOG_REL}/ledger.jsonl", "modify", "도입 기준 시각 기록",
-                              lambda: hb.ledger_append(project, {"kind": "setup", "baseline": hb.iso(hb.now())})))
+                              lambda: hb.ledger_append(main, {"kind": "setup", "baseline": hb.iso(hb.now())})))
     else:
         cfg = json.loads(json.dumps(hb.DEFAULT_CONFIG))
         cfg["reviewers"]["claude"]["model"] = _codex_default_model()
@@ -296,23 +304,23 @@ def plan_install(project: Path, weekly: tuple[int, int, int]) -> list[Step]:
 
         def make_backlog():
             _write_json(cfg_path, cfg)
-            if not hb.ledger_baseline(hb.ledger_read(project)):
-                hb.ledger_append(project, {"kind": "setup", "baseline": hb.iso(hb.now())})
+            if not hb.ledger_baseline(hb.ledger_read(main)):
+                hb.ledger_append(main, {"kind": "setup", "baseline": hb.iso(hb.now())})
 
         steps.append(Step("backlog-dir", str(hb.BACKLOG_REL), "create",
                           "config.json · ledger.jsonl(도입 기준 시각)", make_backlog,
                           json.dumps(cfg, ensure_ascii=False, indent=2).splitlines()))
 
     # 8. 주간 검토가 돌 프로젝트 목록 (전역)
-    if str(project) in _registry():
+    if str(main) in _registry():
         steps.append(Step("registry", str(REGISTRY), "skip", "등록됨"))
     else:
         def register():
             REGISTRY.parent.mkdir(parents=True, exist_ok=True)
             with REGISTRY.open("a", encoding="utf-8") as f:
-                f.write(f"{project}\n")
+                f.write(f"{main}\n")
         steps.append(Step("registry", str(REGISTRY), "modify" if REGISTRY.exists() else "create",
-                          f"+ {project}", register))
+                          f"+ {main}", register))
 
     # 9. 주간 launchd 작업 (전역, 하나만)
     plist = _plist(*weekly)
@@ -333,35 +341,35 @@ def plan_install(project: Path, weekly: tuple[int, int, int]) -> list[Step]:
     return steps
 
 
-def plan_uninstall(project: Path) -> list[Step]:
+def plan_uninstall(checkout: Path, main: Path) -> list[Step]:
     steps: list[Step] = []
     for unit, rel in (("claude-settings", ".claude/settings.json"), ("codex-hooks", ".codex/hooks.json")):
-        path = project / rel
+        path = checkout / rel
         if path.exists():
             data = _read_json(path)
             if _has_hook(data):
                 new = _drop_hook(json.loads(json.dumps(data)))
                 steps.append(Step(unit, rel, "modify", "SessionEnd 훅 제거", lambda p=path, d=new: _write_json(p, d)))
-    agents = project / "AGENTS.md"
+    agents = checkout / "AGENTS.md"
     if agents.exists():
         old = agents.read_text(encoding="utf-8")
         if MARK_START in old and MARK_END in old:
             new = old[: old.index(MARK_START)].rstrip("\n") + "\n" + old[old.index(MARK_END) + len(MARK_END):].lstrip("\n")
             steps.append(Step("AGENTS.md", "AGENTS.md", "modify", "스니펫 제거",
                               lambda a=agents, t=new: hb.publish(a, t, overwrite=True), _diff(old, new, "AGENTS.md")))
-    link = project / LINK_REL
+    link = main / LINK_REL
     if link.is_symlink() and os.readlink(link) == LINK_TARGET:
         steps.append(Step("agents-link", str(LINK_REL), "remove", "링크 제거", link.unlink))
-    dest = project / SKILL_REL
+    dest = main / SKILL_REL
     if dest.exists() and dest.resolve() != SKILL_DIR:
         steps.append(Step("skill", str(SKILL_REL), "remove", "스킬 사본 제거", lambda d=dest: shutil.rmtree(d)))
     elif dest.exists():
         steps.append(Step("skill", str(SKILL_REL), "skip",
                           "지금 실행 중인 사본이라 지우지 않는다. 다른 위치의 setup.py로 제거하거나 직접 지운다"))
     reg = _registry()
-    if str(project) in reg:
-        rest = [r for r in reg if r != str(project)]
-        steps.append(Step("registry", str(REGISTRY), "modify", f"- {project}",
+    if str(main) in reg:
+        rest = [r for r in reg if r != str(main)]
+        steps.append(Step("registry", str(REGISTRY), "modify", f"- {main}",
                           lambda rs=rest: hb.publish(REGISTRY, "".join(f"{r}\n" for r in rs), overwrite=True)))
         if not rest and PLIST.exists():
             def drop_plist():
@@ -414,7 +422,7 @@ MANUAL = """
   3. 설치 뒤 `setup.py --check`로 상태를 확인한다."""
 
 
-def check(project: Path) -> int:
+def check(checkout: Path, main: Path) -> int:
     bad = 0
 
     def row(ok: bool | None, text: str) -> None:
@@ -422,28 +430,28 @@ def check(project: Path) -> int:
         bad += ok is False
         print(f"{'✓' if ok else ('!' if ok is None else '✗')} {text}")
 
-    dest = project / SKILL_REL
+    dest = main / SKILL_REL
     row(dest.exists(), f"스킬 본체 {SKILL_REL}")
     if dest.exists() and dest.resolve() != SKILL_DIR:
         src, have = _skill_files(SKILL_DIR), _skill_files(dest)
         stale = [k for k in src if k not in have or not filecmp.cmp(src[k], have[k], shallow=False)]
         row(not stale or None, "스킬이 원본과 같다" if not stale else f"원본과 다른 파일 {len(stale)}개 — setup.py --apply로 갱신")
-    link = project / LINK_REL
+    link = main / LINK_REL
     row(link.is_symlink() and os.readlink(link) == LINK_TARGET, f"Codex용 링크 {LINK_REL}")
-    agents = project / "AGENTS.md"
+    agents = checkout / "AGENTS.md"
     row(agents.exists() and MARK_START in agents.read_text(encoding="utf-8"), "AGENTS.md 스니펫")
-    if (project / "CLAUDE.md").exists():
+    if (checkout / "CLAUDE.md").exists():
         row(None, "CLAUDE.md도 있다 — 기본 설정이면 Claude Code는 AGENTS.md를 읽지 않는다 "
                   "(CLAUDE.md에서 가져오거나 Project instructions를 claude-md-and-agents-md로)")
     for rel in (".claude/settings.json", ".codex/hooks.json"):
-        p = project / rel
+        p = checkout / rel
         try:
             row(p.exists() and _has_hook(_read_json(p)), f"{rel} SessionEnd 훅")
         except hb.BacklogError as e:
             row(False, str(e))
-    cfg_path = hb.backlog_dir(project) / "config.json"
+    cfg_path = hb.backlog_dir(main) / "config.json"
     row(cfg_path.exists(), f"{hb.BACKLOG_REL}/config.json")
-    cfg = hb.load_config(project)
+    cfg = hb.load_config(main)
     for cli in ("claude", "codex"):
         exe = (cfg.get("cli_paths") or {}).get(cli) or shutil.which(cli)
         row(bool(exe and Path(exe).exists()), f"{cli} CLI {exe or '없음'}")
@@ -452,13 +460,13 @@ def check(project: Path) -> int:
         row(cv >= MIN_CLAUDE, f"Claude Code {'.'.join(map(str, cv))} (AGENTS.md 직접 읽기는 2.1.277 이상)")
     for agent, r in cfg["reviewers"].items():
         row(bool(r.get("model")) or None, f"{agent} 세션 검토자: {r['cli']} {r.get('model') or '(모델 미지정 — 기본 모델)'}")
-    row(str(project) in _registry(), f"주간 검토 등록 {REGISTRY}")
+    row(str(main) in _registry(), f"주간 검토 등록 {REGISTRY}")
     row(PLIST.exists(), f"launchd 작업 {PLIST}")
     r = _launchctl("print", f"gui/{os.getuid()}/{LABEL}")
     if r is not None:
         row(r.returncode == 0, "launchd 작업이 로드돼 있다")
     row(None, "Codex 훅의 /hooks 승인 여부는 Codex 안에서만 확인할 수 있다")
-    entries = hb.ledger_read(project)
+    entries = hb.ledger_read(main)
     base = hb.ledger_baseline(entries)
     last = {k: next((e for e in reversed(entries) if e.get("kind") == k), None) for k in ("session", "weekly")}
     fails = [e for e in entries[-50:] if e.get("status") in ("failed", "unavailable")]
@@ -487,14 +495,15 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     weekly = a.weekly if isinstance(a.weekly, tuple) else parse_weekly(a.weekly)
     try:
-        project = hb.main_worktree(hb.resolve_project(a.project))  # worktree에서 실행해도 원본 checkout에 설치
+        checkout = hb.resolve_project(a.project)  # 실행한 작업 트리 (worktree일 수 있다): 커밋할 파일
+        main = hb.main_worktree(checkout)         # 원본 checkout: 스킬 사본 · 링크 · 기록 · 등록
         if a.check:
-            return check(project)
-        steps = plan_uninstall(project) if a.uninstall else plan_install(project, weekly)
+            return check(checkout, main)
+        steps = plan_uninstall(checkout, main) if a.uninstall else plan_install(checkout, main, weekly)
     except hb.BacklogError as e:
         print(f"중단: {e}", file=sys.stderr)
         return 1
-    print(f"프로젝트: {project}\n")
+    print(f"프로젝트: {checkout}" + (f"\n주 디렉터리: {main}" if main != checkout else "") + "\n")
     show(steps)
     if not a.apply:
         print("\n계획만 보였다. 적용하려면 --apply (없는 파일은 묻거나 --create <단위|all>).")

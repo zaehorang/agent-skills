@@ -712,6 +712,37 @@ def t_worktree(e: Env):
     assert ".local" not in git("status", "--porcelain", "--untracked-files=all", cwd=e.project).stdout, "기록은 git에 잡히지 않아야 한다"
 
 
+def t_worktree_setup(e: Env):
+    """worktree에서 setup 을 돌리면 커밋할 파일은 그 worktree에, 스킬 사본 · 링크 · 기록은 메인에 쓴다."""
+    git = lambda *a, cwd=e.project: subprocess.run(["git", *a], cwd=cwd, capture_output=True, text=True, check=True)
+    ident = ["-c", "user.name=t", "-c", "user.email=t@t"]
+    (e.project / "README.md").write_text("x\n")
+    git("add", "README.md"); git(*ident, "commit", "-qm", "init")
+    wt = e.root / "wt"
+    git("worktree", "add", "-q", str(wt), "-b", "feature")
+    r = e.run("setup.py", "--project", str(wt), "--apply", "--create", "all")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert str(e.project) in r.stdout.splitlines()[1], r.stdout  # 두 경로가 다르면 둘 다 보여준다
+    for rel in ("AGENTS.md", ".claude/settings.json", ".codex/hooks.json", ".gitignore"):
+        assert (wt / rel).exists() and not (e.project / rel).exists(), rel
+    ignore = (wt / ".gitignore").read_text().splitlines()
+    for line in ("/.local/harness-backlog/", "/.claude/skills/harness-backlog/", "/.agents/skills/harness-backlog"):
+        assert line in ignore, ignore
+    assert (e.project / ".claude/skills/harness-backlog/SKILL.md").exists()
+    assert (e.project / ".agents/skills/harness-backlog").is_symlink()
+    assert (e.bdir / "config.json").exists()
+    for rel in (".claude/skills", ".agents", ".local"):
+        assert not (wt / rel).exists(), rel
+    # worktree의 변경을 커밋하면 메인 작업 트리에는 스킬 사본 · 링크 · 기록이 변경으로 잡히지 않는다
+    git("add", "-A", cwd=wt); git(*ident, "commit", "-qm", "setup", cwd=wt)
+    git(*ident, "merge", "-q", "feature")
+    status = git("status", "--porcelain", "--untracked-files=all").stdout
+    assert status == "", status
+    # 다시 돌려도 .gitignore 를 더 건드리지 않는다
+    r = e.run("setup.py", "--project", str(wt), "--apply")
+    assert r.returncode == 0 and "[gitignore]" not in r.stdout, r.stdout
+
+
 TESTS = {k[2:]: v for k, v in globals().items() if k.startswith("t_")}
 
 
