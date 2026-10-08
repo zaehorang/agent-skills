@@ -35,7 +35,7 @@
 
 | 스킬 | 하는 일 | 산출물 |
 |---|---|---|
-| [`ai-readiness-cartography`](./ai-readiness-cartography) | 레포가 코딩 에이전트에게 얼마나 친화적인지 100점 루브릭으로 채점한다. 문서 속 경로가 실재하는지 전부 검증 | 대시보드 `.html` + 점수 `.json` + ROI 순 액션 리스트 |
+| [`ai-readiness-cartography`](./ai-readiness-cartography) | repo가 코딩 에이전트에게 얼마나 친화적인지 100점 rubric으로 채점한다. 문서 속 경로가 실재하는지 전부 검증 | dashboard `.html` + 점수 `.json` + ROI 순 action list |
 
 ---
 
@@ -49,7 +49,7 @@
 
 | 스킬 | 하는 일 | 산출물 |
 |---|---|---|
-| [`presentation-harness`](./presentation-harness) | 장 배열(FLOW)과 전개(SCRIPT)를 먼저 승인받고, 화면에는 말의 근거만 옮긴 16:9 HTML 덱을 만든다 | `FLOW.md` + `SCRIPT.md` + `presentation.html` (+ PDF) |
+| [`presentation-harness`](./presentation-harness) | 장 배열(FLOW)과 전개(SCRIPT)를 먼저 승인받고, 화면에는 말의 근거만 옮긴 16:9 HTML deck을 만든다 | `FLOW.md` + `SCRIPT.md` + `presentation.html` (+ PDF) |
 
 ---
 
@@ -63,9 +63,9 @@
 
 | 스킬 | 하는 일 | 산출물 |
 |---|---|---|
-| [`behavior-spec-extraction`](./behavior-spec-extraction) | 기존 코드에서 구현 용어를 걷어낸 "관측 가능한 동작" 명세를 역추출한다. 린터가 구현 누출을 막는다 | 명세 `.md` (코드 블록 없음) |
+| [`behavior-spec-extraction`](./behavior-spec-extraction) | 기존 코드에서 구현 용어를 걷어낸 "관측 가능한 동작" 명세를 역추출한다. linter가 구현 누출을 막는다 | 명세 `.md` (코드 블록 없음) |
 | [`herdr-dispatch`](./herdr-dispatch) | 옆 pane에 일을 넘길 때 모델 · 추론 강도 · 권한을 역할표로 고른다 | 알맞게 설정된 pane + 선택 근거 |
-| [`harness-backlog`](./harness-backlog) | 세션이 끝나면 다른 모델이 하네스 빈틈을 backlog에 제안한다. 반영은 사람이 한다 | `.local/harness-backlog/*.md` + 설치 스크립트 |
+| [`harness-backlog`](./harness-backlog) | 세션이 끝나면 다른 모델이 harness 빈틈을 backlog에 제안한다. 반영은 사람이 한다 | `.local/harness-backlog/*.md` + 설치 스크립트 |
 
 ---
 
@@ -73,7 +73,7 @@
 
 ### Claude Code 플러그인으로
 
-마켓플레이스를 한 번 등록하면, 위 각 주제의 설치 명령이 그대로 먹는다.
+marketplace를 한 번 등록하면, 위 각 주제의 설치 명령이 그대로 먹는다.
 
 ```
 /plugin marketplace add zaehorang/horang-skills
@@ -87,12 +87,12 @@
 | `present` | 🎤 발표하기 | `presentation-harness` |
 | `dev` | 🛠 개발하기 | `behavior-spec-extraction` · `herdr-dispatch` · `harness-backlog` |
 
-설치한 스킬은 `/study:blog-review`처럼 묶음 이름이 앞에 붙는다. 자동 트리거는 그대로 동작한다.
-서드파티 마켓플레이스는 자동 업데이트가 꺼져 있으니 갱신은 `claude plugin update study@horang-skills`로 한다.
+설치한 스킬은 `/study:blog-review`처럼 묶음 이름이 앞에 붙는다. auto-trigger는 그대로 동작한다.
+third-party marketplace는 자동 업데이트가 꺼져 있으니 갱신은 `claude plugin update study@horang-skills`로 한다.
 
 ### 폴더 복사로 (모든 에이전트)
 
-폴더를 통째로 스킬 디렉터리에 복사(또는 심볼릭 링크)하면 끝이다.
+폴더를 통째로 스킬 디렉터리에 복사(또는 symlink)하면 끝이다.
 
 | 에이전트 | 개인 스킬 | 프로젝트 스킬 |
 |---|---|---|
@@ -117,21 +117,21 @@ cp -R horang-skills/mechanism-explainer ~/.claude/skills/
 
 ```
 <skill-name>/
-├── SKILL.md          필수 — 프론트매터(name·description) + 절차
+├── SKILL.md          필수 — frontmatter(name·description) + 절차
 ├── references/       선택 — 길어서 본문에 못 넣은 참고 자료
-├── assets/           선택 — 템플릿·골격 파일
-└── scripts/          선택 — 실행 스크립트
+├── assets/           선택 — template·scaffold 파일
+└── scripts/          선택 — 실행 script
 ```
 
-레포 루트의 `.claude-plugin/marketplace.json`이 묶음을 정의한다. 묶음은 스킬 폴더를 옮기지 않고 폴더 목록만 가리키므로,
+repo root의 `.claude-plugin/marketplace.json`이 묶음을 정의한다. 묶음은 스킬 폴더를 옮기지 않고 폴더 목록만 가리키므로,
 플러그인으로 깔든 폴더를 복사하든 같은 파일이 쓰인다.
 
 `SKILL.md`는 처음에 `description`만 읽히고, 요청이 그 설명과 맞을 때 본문이 통째로 로드된다.
-그래서 **`description`에 트리거 문구를 넉넉히** 적고, 긴 설명은 `references/`로 뺀다.
+그래서 **`description`에 trigger 문구를 넉넉히** 적고, 긴 설명은 `references/`로 뺀다.
 
-## 이 레포의 규칙
+## 이 repo의 규칙
 
-- **벤더 이름을 본문에 쓰지 않는다.** 특정 도구 이름 대신 능력으로 쓴다 — "웹 페이지를 가져온다", "파일로 저장한다". 그래야 어느 에이전트에서든 돈다.
+- **vendor 이름을 본문에 쓰지 않는다.** 특정 도구 이름 대신 능력으로 쓴다 — "웹 페이지를 가져온다", "파일로 저장한다". 그래야 어느 에이전트에서든 돈다.
   단, **특정 도구를 제어하는 것 자체가 목적인 스킬은 예외다.** 도구 이름이 곧 내용이라 추상화하면 스킬이 할 일이 없어진다 (`herdr-dispatch`, `harness-backlog`).
 - **스킬 폴더에 README.md를 두지 않는다.** `SKILL.md`가 그 역할이고, 둘을 두면 어긋난다.
 - **개인 취향을 스킬에 넣지 않는다.** 판별 기준:
