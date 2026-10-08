@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ko">
+<!-- 화면 글자는 data-ui 키로 content.js 의 ui 에서 바꿀 수 있다 (기본값: 아래 한국어) -->
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>탐험 지도</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="world.css">
+</head>
+<body>
+<div id="app">
+  <svg id="stage" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-label="탐험 지도">
+    <defs id="defs">
+      <radialGradient id="glow" cx=".5" cy=".5" r=".5">
+        <stop offset="0" stop-color="#fff6b0" stop-opacity=".95"/><stop offset="1" stop-color="#fff6b0" stop-opacity="0"/>
+      </radialGradient>
+      <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#0b2a3a" flood-opacity=".22"/>
+      </filter>
+    </defs>
+    <rect id="bg" x="-2000" y="-2000" width="5600" height="5000"/>
+    <g id="world"></g>
+  </svg>
+
+  <header class="brand">
+    <div class="logo" id="brandLogo">◆</div>
+    <div>
+      <h1 id="brandTitle"></h1>
+      <p id="brandSub"></p>
+    </div>
+  </header>
+
+  <div class="topright">
+    <button type="button" id="nameBtn" class="pill" aria-pressed="false">실제 이름 보기</button>
+    <button type="button" id="overviewBtn" class="pill" data-ui="overview">전체 보기</button>
+    <button type="button" id="helpBtn" class="pill q" aria-label="이 페이지 보는 법" data-ui-aria="helpAria">?</button>
+  </div>
+
+  <!-- 사건 버튼 -->
+  <nav class="events" id="events" aria-label="사건 일으키기">
+    <div class="events-ttl" data-ui="eventsTitle">사건 일으키기</div>
+    <div id="evList"></div>
+  </nav>
+
+  <!-- 자막 (겹 1) -->
+  <section class="caption" id="caption" hidden aria-live="polite">
+    <div class="cap-top">
+      <span class="cap-ev" id="capEv"></span>
+      <span class="dots" id="dots"></span>
+      <span class="cap-legend" data-ui="capLegend"><b class="n-o">파랑</b> 공식 용어 · <b class="n-c">노랑</b> 직접 지은 이름 · <b class="n-a">회색</b> 자동 생성</span>
+      <button type="button" class="cap-x" id="capClose" aria-label="사건 닫기">✕</button>
+    </div>
+    <p class="cap-text" id="capText"></p>
+    <div class="cap-row">
+      <button type="button" class="chip" id="capActor"></button>
+      <span class="grow"></span>
+      <label class="auto"><input type="checkbox" id="autoChk"> <span data-ui="auto">자동 재생</span></label>
+      <button type="button" class="btn ghost" id="moreBtn" data-ui="capMore">더 보기</button>
+      <button type="button" class="btn ghost" id="prevBtn" data-ui="prev">◀ 이전</button>
+      <button type="button" class="btn" id="nextBtn">다음 ▶</button>
+    </div>
+  </section>
+
+  <!-- 말풍선 (겹 1, 물체를 눌렀을 때) -->
+  <div class="tip" id="tip" hidden>
+    <div class="tip-name" id="tipName"></div>
+    <div class="tip-real" id="tipReal"></div>
+    <p id="tipText"></p>
+    <button type="button" class="tip-more" id="tipMore" data-ui="tipMore">더 알아보기 →</button>
+  </div>
+
+  <!-- 패널 (겹 2·3) -->
+  <aside class="panel" id="panel" aria-hidden="true">
+    <button type="button" class="panel-x" id="panelClose" aria-label="닫기">✕</button>
+    <div id="panelBody"></div>
+  </aside>
+
+  <!-- 이름 설명 -->
+  <div class="ntip" id="ntip" hidden></div>
+
+  <!-- 보는 법 (?) -->
+  <div class="help" id="help" hidden>
+    <div class="help-card" role="dialog" aria-label="이 페이지 보는 법">
+      <button type="button" class="panel-x" id="helpClose" aria-label="닫기">✕</button>
+      <div data-ui="help">
+      <h2>이 페이지 보는 법</h2>
+      <h3>1. 궁금한 만큼만 깊이 들어가요</h3>
+      <ol class="layers">
+        <li><b>자막</b> — 사건을 일으키면 아래에 장면마다 한두 줄이 떠요. 이것만 봐도 흐름이 잡혀요.</li>
+        <li><b>더 보기</b> — 하는 일, 누구와 무엇으로 이야기하는지, 내부 순서. 여는 동안 사건은 멈춰요.</li>
+        <li><b>실제로는?</b> — 그 순간의 실제 요청·기록·명령 출력.</li>
+      </ol>
+      <p class="hint2">지도의 건물·인물·물건을 누르면 언제든 한 줄 설명이 떠요.</p>
+      <h3>2. 글자 색으로 이름의 출처를 구분해요</h3>
+      <div class="legend-rows" id="helpLegend"></div>
+      <p class="hint2">색 글자에 마우스를 올리면 왜 그런 이름인지 알려 줘요.</p>
+      <h3>3. 비유 이름 ↔ 실제 이름</h3>
+      <p class="hint2">지도의 이름은 이해를 돕는 비유예요. 오른쪽 위 <b>실제 이름 보기</b>를 누르면 라벨이 실제 이름으로 바뀌어요.</p>
+      <h3>4. 조작</h3>
+      <p class="hint2"><kbd>←</kbd> <kbd>→</kbd> 장면 이동 · 자막 위 점을 누르면 그 장면으로 이동 · <kbd>Esc</kbd> 닫기 · <kbd>?</kbd> 이 도움말</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 첫 안내 -->
+  <div class="intro" id="intro">
+    <div class="intro-card">
+      <div class="intro-logo" id="introLogo">◆</div>
+      <h2 id="introTitle"></h2>
+      <p id="introBody"></p>
+      <p class="sub"><span id="introSub"></span><br><span data-ui="introHint">보는 법이 헷갈리면 오른쪽 위 <b>?</b> 버튼을 누르세요.</span></p>
+      <button type="button" class="btn big" id="introGo" data-ui="introGo">둘러보기 시작</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/MotionPathPlugin.min.js"></script>
+<script src="iso.js"></script>
+<script src="content.js"></script>
+<script src="world.js"></script>
+<script src="engine.js"></script>
+</body>
+</html>
