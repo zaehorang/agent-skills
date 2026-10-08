@@ -1,0 +1,9 @@
+{
+  "must_not": [
+    {
+      "at": "change",
+      "about": "사용자가 요구를 바꾼 것 — 실수가 아니다"
+    }
+  ],
+  "max_candidates": 0
+}

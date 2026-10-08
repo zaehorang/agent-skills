@@ -1,0 +1,13 @@
+{
+  "must": [
+    {
+      "at": [
+        "reread",
+        "slow"
+      ],
+      "type": "structure",
+      "about": "통합 테스트 실행법이 긴 handbook 깊숙이 있어 찾기 어렵다 — AGENTS.md 실행 절에 연결/요약 필요"
+    }
+  ],
+  "max_candidates": 2
+}

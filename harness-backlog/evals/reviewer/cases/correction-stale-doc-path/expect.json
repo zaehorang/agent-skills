@@ -1,0 +1,13 @@
+{
+  "must": [
+    {
+      "at": [
+        "stale",
+        "confirm"
+      ],
+      "type": "correction",
+      "about": "AGENTS.md의 운영 문서 경로(docs/runbook.md)가 낡았다 — docs/ops/로 바뀜"
+    }
+  ],
+  "max_candidates": 2
+}

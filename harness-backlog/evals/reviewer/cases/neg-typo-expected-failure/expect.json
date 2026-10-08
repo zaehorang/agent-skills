@@ -1,0 +1,13 @@
+{
+  "must_not": [
+    {
+      "at": "red",
+      "about": "TDD의 예상된 실패"
+    },
+    {
+      "at": "typo",
+      "about": "일회성 오타"
+    }
+  ],
+  "max_candidates": 0
+}

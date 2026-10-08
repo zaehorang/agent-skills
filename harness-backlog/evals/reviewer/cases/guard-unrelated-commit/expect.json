@@ -1,0 +1,13 @@
+{
+  "must": [
+    {
+      "at": [
+        "add",
+        "correction"
+      ],
+      "type": "guard",
+      "about": "이미 있는 '변경 파일만 add' 규칙을 어김 — 커밋 전 staged 확인 같은 더 강한 장치가 필요"
+    }
+  ],
+  "max_candidates": 2
+}

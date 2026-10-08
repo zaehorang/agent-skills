@@ -1,0 +1,10 @@
+{
+  "must": [
+    {
+      "at": "policy",
+      "type": "knowledge",
+      "about": "금요일 프로덕션 배포 금지라는 팀 정책이 하네스에 없다"
+    }
+  ],
+  "max_candidates": 2
+}
