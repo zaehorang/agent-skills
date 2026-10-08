@@ -132,6 +132,7 @@ status: "pending"
 2. 없는 파일(`+ 새로 만듦`)은 단위마다 만들지 묻는다. 기존 파일 수정은 diff를 보여준다.
 3. 승인받은 단위만 `setup.py --project <경로> --apply --create <단위…>`로 적용한다.
 4. 출력의 "직접 할 일"을 전한다: Codex의 `/hooks`로 훅 승인, 두 CLI 로그인.
+   Codex 훅은 승인한 뒤 끝나는 세션부터 돈다. 대화형 Codex는 `/exit` 후 약 1분 뒤(데몬이 대화를 정리할 때) 돈다.
 5. `setup.py --check`로 확인한다. 스킬을 고쳤다면 **원본(agent-skills)의** `setup.py --project <경로> --apply`로 사본을 갱신한다.
    프로젝트 안의 사본으로 실행하면 자기 자신이라 갱신하지 않는다.
 6. 제거는 `setup.py --uninstall`로 계획을 보이고 승인 후 `--apply`. `history/`는 남는다.
@@ -156,4 +157,5 @@ status: "pending"
 
 - 죽은 규칙(아무도 안 쓰는 규칙)은 세션에서 신호가 나오지 않아 잡지 못한다.
 - 개인 메모리(Claude Code auto memory, Codex memories)는 건드리지 않는다. 그쪽은 개인 선호, backlog는 프로젝트 하네스다.
+  다만 Claude는 교정을 받으면 auto memory에 저장하려 하기도 한다 — 사람 확인 없이 다음 세션에 반영되는 경로이고, 이 스킬은 막지 않는다.
 - 검토 품질은 검토 모델에 달려 있다. 기각 이유가 쌓이면 `references/review.md`를 고칠 근거가 된다.
