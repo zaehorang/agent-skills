@@ -1,0 +1,15 @@
+{
+  "name": "horang-skills",
+  "owner": { "name": "zaehorang", "url": "https://github.com/zaehorang" },
+  "description": "이해하기 어려운 것을, 사람이 검수할 수 있는 산출물로 바꾸는 스킬 모음",
+  "plugins": [
+    {
+      "name": "study",
+      "description": "남이 만든 것을 내가 아는 것으로: 내부 동작을 단계별 HTML로 따라가고(mechanism-explainer), 아키텍처를 세계관 지도로 탐험한다(explorable-world)",
+      "source": "./",
+      "skills": ["./mechanism-explainer", "./explorable-world"],
+      "category": "learning",
+      "tags": ["learning", "visualization", "html"]
+    }
+  ]
+}

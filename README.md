@@ -1,4 +1,4 @@
-# agent-skills
+# horang-skills
 
 내가 쓰는 **Agent Skills** 모음. 필요한 폴더만 가져다 쓰면 된다.
 
@@ -108,14 +108,30 @@ Claude 세션은 Codex가, Codex 세션은 Claude가 본다. 주간 검토는 �
 | Codex CLI | `~/.agents/skills/` | `.agents/skills/` |
 | Cursor · Gemini CLI 등 | 각 도구 문서 참고 | |
 
+### Claude Code 플러그인으로 (역할별 묶음)
+
+```
+/plugin marketplace add zaehorang/horang-skills
+/plugin install study@horang-skills
+```
+
+| 묶음 | 들어 있는 스킬 | 호출 이름 |
+|---|---|---|
+| `study` | `mechanism-explainer` · `explorable-world` | `/study:mechanism-explainer` 등 |
+
+묶음에 없는 스킬은 아래처럼 폴더를 복사해 쓴다.
+서드파티 마켓플레이스는 자동 업데이트가 꺼져 있으니 갱신은 `claude plugin update study@horang-skills`로 한다.
+
+### 폴더 복사로 (모든 에이전트)
+
 ```bash
-git clone https://github.com/zaehorang/agent-skills.git
-cp -R agent-skills/mechanism-explainer ~/.claude/skills/
+git clone https://github.com/zaehorang/horang-skills.git
+cp -R horang-skills/mechanism-explainer ~/.claude/skills/
 ```
 
 에이전트에게 시켜도 된다:
 
-> `https://github.com/zaehorang/agent-skills` 의 `mechanism-explainer` 폴더를 내 스킬 디렉터리에 복사해줘
+> `https://github.com/zaehorang/horang-skills` 의 `mechanism-explainer` 폴더를 내 스킬 디렉터리에 복사해줘
 
 설치 후 에이전트를 재시작해야 목록에 뜬다.
 
