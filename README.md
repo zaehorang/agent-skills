@@ -1,6 +1,6 @@
 # horang-skills
 
-내가 쓰는 **Agent Skills** 모음. 필요한 폴더만 가져다 쓰면 된다.
+내가 쓰는 **Agent Skills** 모음. 역할별 묶음을 Claude Code 플러그인으로 깔거나, 필요한 폴더만 가져다 쓰면 된다.
 
 [Agent Skills](https://agentskills.io)는 에이전트에게 절차적 지식을 넘기는 오픈 포맷이다.
 폴더 하나 = 스킬 하나이고, 안의 `SKILL.md`가 전부다. Claude Code · Codex · Cursor · Gemini CLI 등이 같은 포맷을 읽는다.
@@ -12,6 +12,8 @@
 ## 📖 이해하기
 
 > 남이 만든 것을 내가 아는 것으로.
+
+이 중 `mechanism-explainer`와 `explorable-world`는 플러그인 묶음 **`study`**로 한 번에 설치할 수 있다 → [설치](#설치).
 
 ### [`mechanism-explainer`](./mechanism-explainer)
 시스템이 **내부적으로 어떻게 돌아가는지**를 단계별로 따라가는 HTML로 만든다.
@@ -100,13 +102,7 @@ Claude 세션은 Codex가, Codex 세션은 Claude가 본다. 주간 검토는 �
 
 ## 설치
 
-폴더를 통째로 스킬 디렉터리에 복사(또는 심볼릭 링크)하면 끝이다.
-
-| 에이전트 | 개인 스킬 | 프로젝트 스킬 |
-|---|---|---|
-| Claude Code | `~/.claude/skills/` | `.claude/skills/` |
-| Codex CLI | `~/.agents/skills/` | `.agents/skills/` |
-| Cursor · Gemini CLI 등 | 각 도구 문서 참고 | |
+두 가지 길이 있다. Claude Code라면 역할별 묶음을 플러그인으로 깔고, 그 외 에이전트나 묶음에 없는 스킬은 폴더를 복사한다.
 
 ### Claude Code 플러그인으로 (역할별 묶음)
 
@@ -123,6 +119,14 @@ Claude 세션은 Codex가, Codex 세션은 Claude가 본다. 주간 검토는 �
 서드파티 마켓플레이스는 자동 업데이트가 꺼져 있으니 갱신은 `claude plugin update study@horang-skills`로 한다.
 
 ### 폴더 복사로 (모든 에이전트)
+
+폴더를 통째로 스킬 디렉터리에 복사(또는 심볼릭 링크)하면 끝이다.
+
+| 에이전트 | 개인 스킬 | 프로젝트 스킬 |
+|---|---|---|
+| Claude Code | `~/.claude/skills/` | `.claude/skills/` |
+| Codex CLI | `~/.agents/skills/` | `.agents/skills/` |
+| Cursor · Gemini CLI 등 | 각 도구 문서 참고 | |
 
 ```bash
 git clone https://github.com/zaehorang/horang-skills.git
@@ -146,6 +150,9 @@ cp -R horang-skills/mechanism-explainer ~/.claude/skills/
 ├── assets/           선택 — 템플릿·골격 파일
 └── scripts/          선택 — 실행 스크립트
 ```
+
+레포 루트의 `.claude-plugin/marketplace.json`이 묶음을 정의한다. 묶음은 스킬 폴더를 옮기지 않고 폴더 목록만 가리키므로,
+플러그인으로 깔든 폴더를 복사하든 같은 파일이 쓰인다.
 
 `SKILL.md`는 처음에 `description`만 읽히고, 요청이 그 설명과 맞을 때 본문이 통째로 로드된다.
 그래서 **`description`에 트리거 문구를 넉넉히** 적고, 긴 설명은 `references/`로 뺀다.
