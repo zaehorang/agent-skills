@@ -1,0 +1,50 @@
+{
+  "name": "horang-skills",
+  "owner": {
+    "name": "zaehorang",
+    "url": "https://github.com/zaehorang"
+  },
+  "description": "이해하기 어려운 것을, 사람이 검수할 수 있는 산출물로 바꾸는 스킬 모음. 주제별 묶음으로 설치한다",
+  "plugins": [
+    {
+      "name": "study",
+      "description": "이해하기 — 내부 동작을 단계별 HTML로(mechanism-explainer), 아키텍처를 세계관 지도로(explorable-world), 블로그 글을 대화형 학습 노트로(blog-review)",
+      "source": "./",
+      "skills": [
+        "./mechanism-explainer",
+        "./explorable-world",
+        "./blog-review"
+      ],
+      "category": "learning"
+    },
+    {
+      "name": "audit",
+      "description": "진단하기 — 레포가 코딩 에이전트에게 얼마나 친화적인지 채점하고 대시보드로(ai-readiness-cartography)",
+      "source": "./",
+      "skills": [
+        "./ai-readiness-cartography"
+      ],
+      "category": "analysis"
+    },
+    {
+      "name": "present",
+      "description": "발표하기 — 대본을 먼저 세우고 HTML 16:9 덱을 만들어 검사·PDF 내보내기(presentation-harness)",
+      "source": "./",
+      "skills": [
+        "./presentation-harness"
+      ],
+      "category": "productivity"
+    },
+    {
+      "name": "dev",
+      "description": "개발하기 — 기존 코드를 동작 명세로 역추출(behavior-spec-extraction), 옆 pane에 알맞은 설정으로 위임(herdr-dispatch), 세션이 끝나면 하네스 빈틈을 backlog로 제안(harness-backlog)",
+      "source": "./",
+      "skills": [
+        "./behavior-spec-extraction",
+        "./herdr-dispatch",
+        "./harness-backlog"
+      ],
+      "category": "workflow"
+    }
+  ]
+}

@@ -139,7 +139,7 @@ status: "pending"
 3. 승인받은 단위만 `setup.py --project <경로> --apply --create <단위…>`로 적용한다.
 4. 출력의 "직접 할 일"을 전한다: Codex의 `/hooks`로 훅 승인, 두 CLI 로그인.
    Codex 훅은 승인한 뒤 끝나는 세션부터 돈다. 대화형 Codex는 `/exit` 후 약 1분 뒤(데몬이 대화를 정리할 때) 돈다.
-5. `setup.py --check`로 확인한다. 스킬을 고쳤다면 **원본(agent-skills)의** `setup.py --project <경로> --apply`로 사본을 갱신한다.
+5. `setup.py --check`로 확인한다. 스킬을 고쳤다면 **원본(horang-skills)의** `setup.py --project <경로> --apply`로 사본을 갱신한다.
    프로젝트 안의 사본으로 실행하면 자기 자신이라 갱신하지 않는다.
 6. 제거는 `setup.py --uninstall`로 계획을 보이고 승인 후 `--apply`. `history/`는 남는다.
 

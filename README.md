@@ -1,6 +1,6 @@
-# agent-skills
+# horang-skills
 
-내가 쓰는 **Agent Skills** 모음. 필요한 폴더만 가져다 쓰면 된다.
+**Agent Skills** 모음. 주제별로 묶여 있고, 각 주제는 Claude Code 플러그인 하나로 설치하거나 폴더만 복사해 쓴다.
 
 [Agent Skills](https://agentskills.io)는 에이전트에게 절차적 지식을 넘기는 오픈 포맷이다.
 폴더 하나 = 스킬 하나이고, 안의 `SKILL.md`가 전부다. Claude Code · Codex · Cursor · Gemini CLI 등이 같은 포맷을 읽는다.
@@ -13,45 +13,15 @@
 
 > 남이 만든 것을 내가 아는 것으로.
 
-### [`mechanism-explainer`](./mechanism-explainer)
-시스템이 **내부적으로 어떻게 돌아가는지**를 단계별로 따라가는 HTML로 만든다.
-단계마다 상태 다이어그램이 바뀌고, 실제 코드·로그의 before/after가 나란히 뜬다.
-번들링·렌더링·합의 프로토콜처럼 **글로 읽으면 안 잡히는 것**에 쓴다.
+```
+/plugin install study@horang-skills
+```
 
-`파이프라인` `프로토콜` `알고리즘` `런타임` `요청 수명주기` 5유형별로 그리는 법이 다르다.
-→ 산출물: 단일 `.html` (의존성 0)
-
-### [`explorable-world`](./explorable-world)
-여러 부품이 서로 **어떤 순서로 무엇을 주고받는지**를, 세계관 지도 위에서 사건을 일으키며 탐험하는 페이지로 만든다.
-쿠버네티스는 항구, 네트워크 요청은 우편 도시처럼 부품을 장소·인물·물건으로 바꾸고, 사건을 누르면 요청이 지도를 오가는 애니메이션이 재생된다.
-
-설명은 처음부터 쏟아지지 않는다 — **자막(늘 보임) → 더 보기(하는 일·소통·내부 순서) → 실제로는?(실제 요청·기록·출력)** 순서로 궁금한 만큼만 깊어진다.
-비유가 실제와 어긋나는 곳은 숨기지 않고 밝히고, 이름은 **파랑 공식 용어 · 노랑 직접 지은 이름 · 회색 자동 생성**으로 칠해 무엇을 외워야 하는지 보이게 한다.
-공용 엔진 위에 주제 파일 세 개만 쓰고, 정적 검사와 브라우저 자동 검사·품질 rubric 으로 채점한다.
-→ 산출물: 정적 웹 페이지 폴더 (`index.html` + 엔진 + 주제 파일, GSAP CDN)
-
-### [`blog-review`](./blog-review)
-테크 블로그 글 하나를 **대화형으로** 리뷰해 학습 노트로 남긴다.
-글을 요약해주지 않는다 — 뼈대만 깔고 멈춘 뒤, 사용자가 "내가 이해한 것 / 생각 / 질문"을 내놓게 하고
-`✅ 맞음` / `🔧 교정` / `💡 한 단계 더`로 반응한다. **확인된 것보다 교정당한 것이 오래 남는다.**
-
-교정 **전** 사용자 입력 원문을 JSONL로 보존하고, 범용 개념은 개념 사전으로 분리한다.
-→ 산출물: 학습 노트 `.md` + 개념 파일 + raw `.jsonl`
-
----
-
-## 📝 문서화하기
-
-> 코드 안에만 있는 것을 밖으로.
-
-### [`behavior-spec-extraction`](./behavior-spec-extraction)
-기존 코드를 읽어 **그 기술을 모르는 사람도 검수할 수 있는 동작 명세**로 역추출한다.
-클래스·메서드 이름과 프레임워크 용어를 명세에서 걷어내고, **밖에서 관측되는 것**만 남긴다 —
-발동 계기 / 들어오는 값 / 밖에 남는 변화 / 실패 경로.
-
-번들된 린터가 구현 누출과 검증 불가능한 Acceptance를 잡고, **에러가 남으면 제출을 막는다.**
-코드만으로 알 수 없는 건 지어내지 않고 `열린 질문`으로 남긴다.
-→ 산출물: 명세 `.md` (코드 블록 없음)
+| 스킬 | 하는 일 | 산출물 |
+|---|---|---|
+| [`mechanism-explainer`](./mechanism-explainer) | 시스템 내부 동작을 단계별 상태 다이어그램 + 실제 before/after로 따라간다 | 단일 `.html` |
+| [`explorable-world`](./explorable-world) | 아키텍처를 세계관 지도로 바꾸고, 사건 버튼으로 요청의 흐름을 애니메이션으로 탐험한다 | 정적 웹 페이지 폴더 |
+| [`blog-review`](./blog-review) | 테크 블로그를 대화형으로 리뷰한다. 요약 대신 사용자의 이해를 끌어내 ✅/🔧/💡로 교정한다 | 학습 노트 `.md` + 개념 파일 + raw `.jsonl` |
 
 ---
 
@@ -59,46 +29,68 @@
 
 > 지금 상태가 어떤지 숫자로.
 
-### [`ai-readiness-cartography`](./ai-readiness-cartography)
-레포가 **코딩 에이전트에게 얼마나 친화적인지** 100점 루브릭 7개 카테고리로 채점하고,
-HTML 대시보드 + ROI 순으로 정렬된 액션 리스트를 만든다.
+```
+/plugin install audit@horang-skills
+```
 
-가장 중요한 건 **hallucinated path 검증** — 문서에 적힌 경로가 실제로 존재하는지 전부 확인한다.
-ROI는 정성적 형용사를 금지한다("효율 ↑" ✗ / "task당 ~3분 × ~5회/일" ✓).
-→ 산출물: 대시보드 `.html` + 점수 `.json` + 액션 리스트
-
----
-
-## 🔀 위임하기
-
-> 다른 모델에게, 알맞은 설정으로.
-
-### [`herdr-dispatch`](./herdr-dispatch)
-터미널 멀티플렉서로 옆 pane에 일을 넘길 때 **모델 · 추론 강도 · 권한** 세 가지를 의식적으로 고른다.
-기본값으로 띄우면 간단한 일에 큰 모델이 붙고, 권한을 안 정해서 **승인 대기로 멈춘다.**
-
-역할표는 각 벤더 공식 문서를 근거로 쓴다 — 리뷰는 추론을 올리고 읽기 전용, 탐색은 작은 모델,
-테스트·빌드는 **에이전트를 아예 띄우지 않는다.**
-모델 이름이 낡으면 감시하지 않고 **실패한 그 자리에서 표를 고친다.**
-→ 산출물: 알맞게 설정된 pane + 선택 근거
+| 스킬 | 하는 일 | 산출물 |
+|---|---|---|
+| [`ai-readiness-cartography`](./ai-readiness-cartography) | 레포가 코딩 에이전트에게 얼마나 친화적인지 100점 루브릭으로 채점한다. 문서 속 경로가 실재하는지 전부 검증 | 대시보드 `.html` + 점수 `.json` + ROI 순 액션 리스트 |
 
 ---
 
-## 🔁 쌓아가기
+## 🎤 발표하기
 
-> 세션에서 드러난 빈틈을, 사람이 확인한 것만 하네스로.
+> 슬라이드보다 대본이 먼저.
 
-### [`harness-backlog`](./harness-backlog)
-세션이 끝나면 **다른 모델이** 그 세션을 읽고 하네스(AGENTS.md·스킬·문서·권한)의 빈틈을 backlog에 제안으로 남긴다 —
-Claude 세션은 Codex가, Codex 세션은 Claude가 본다. 주간 검토는 여러 세션에 걸친 반복 설명·재발·에이전트 간 차이를 찾는다.
+```
+/plugin install present@horang-skills
+```
 
-**AI는 제안만 하고 반영은 사람이 한다.** 에이전트가 하네스를 스스로 고치면 오답이 정답 행세를 하기 때문이다.
-반영이든 기각이든 이유가 `_resolved/`에 남아, 같은 제안이 다시 올라오지 않는다.
-→ 산출물: 프로젝트의 `.local/harness-backlog/*.md` (git 제외) + 설치 스크립트(훅 · launchd)
+| 스킬 | 하는 일 | 산출물 |
+|---|---|---|
+| [`presentation-harness`](./presentation-harness) | 장 배열(FLOW)과 전개(SCRIPT)를 먼저 승인받고, 화면에는 말의 근거만 옮긴 16:9 HTML 덱을 만든다 | `FLOW.md` + `SCRIPT.md` + `presentation.html` (+ PDF) |
+
+---
+
+## 🛠 개발하기
+
+> 코드 밖에 남겨야 할 것을 남기고, 일은 알맞은 곳에 넘긴다.
+
+```
+/plugin install dev@horang-skills
+```
+
+| 스킬 | 하는 일 | 산출물 |
+|---|---|---|
+| [`behavior-spec-extraction`](./behavior-spec-extraction) | 기존 코드에서 구현 용어를 걷어낸 "관측 가능한 동작" 명세를 역추출한다. 린터가 구현 누출을 막는다 | 명세 `.md` (코드 블록 없음) |
+| [`herdr-dispatch`](./herdr-dispatch) | 옆 pane에 일을 넘길 때 모델 · 추론 강도 · 권한을 역할표로 고른다 | 알맞게 설정된 pane + 선택 근거 |
+| [`harness-backlog`](./harness-backlog) | 세션이 끝나면 다른 모델이 하네스 빈틈을 backlog에 제안한다. 반영은 사람이 한다 | `.local/harness-backlog/*.md` + 설치 스크립트 |
 
 ---
 
 ## 설치
+
+### Claude Code 플러그인으로
+
+마켓플레이스를 한 번 등록하면, 위 각 주제의 설치 명령이 그대로 먹는다.
+
+```
+/plugin marketplace add zaehorang/horang-skills
+/plugin install study@horang-skills
+```
+
+| 묶음 | 주제 | 스킬 |
+|---|---|---|
+| `study` | 📖 이해하기 | `mechanism-explainer` · `explorable-world` · `blog-review` |
+| `audit` | 🔍 진단하기 | `ai-readiness-cartography` |
+| `present` | 🎤 발표하기 | `presentation-harness` |
+| `dev` | 🛠 개발하기 | `behavior-spec-extraction` · `herdr-dispatch` · `harness-backlog` |
+
+설치한 스킬은 `/study:blog-review`처럼 묶음 이름이 앞에 붙는다. 자동 트리거는 그대로 동작한다.
+서드파티 마켓플레이스는 자동 업데이트가 꺼져 있으니 갱신은 `claude plugin update study@horang-skills`로 한다.
+
+### 폴더 복사로 (모든 에이전트)
 
 폴더를 통째로 스킬 디렉터리에 복사(또는 심볼릭 링크)하면 끝이다.
 
@@ -109,13 +101,13 @@ Claude 세션은 Codex가, Codex 세션은 Claude가 본다. 주간 검토는 �
 | Cursor · Gemini CLI 등 | 각 도구 문서 참고 | |
 
 ```bash
-git clone https://github.com/zaehorang/agent-skills.git
-cp -R agent-skills/mechanism-explainer ~/.claude/skills/
+git clone https://github.com/zaehorang/horang-skills.git
+cp -R horang-skills/mechanism-explainer ~/.claude/skills/
 ```
 
 에이전트에게 시켜도 된다:
 
-> `https://github.com/zaehorang/agent-skills` 의 `mechanism-explainer` 폴더를 내 스킬 디렉터리에 복사해줘
+> `https://github.com/zaehorang/horang-skills` 의 `mechanism-explainer` 폴더를 내 스킬 디렉터리에 복사해줘
 
 설치 후 에이전트를 재시작해야 목록에 뜬다.
 
@@ -131,6 +123,9 @@ cp -R agent-skills/mechanism-explainer ~/.claude/skills/
 └── scripts/          선택 — 실행 스크립트
 ```
 
+레포 루트의 `.claude-plugin/marketplace.json`이 묶음을 정의한다. 묶음은 스킬 폴더를 옮기지 않고 폴더 목록만 가리키므로,
+플러그인으로 깔든 폴더를 복사하든 같은 파일이 쓰인다.
+
 `SKILL.md`는 처음에 `description`만 읽히고, 요청이 그 설명과 맞을 때 본문이 통째로 로드된다.
 그래서 **`description`에 트리거 문구를 넉넉히** 적고, 긴 설명은 `references/`로 뺀다.
 
@@ -139,7 +134,7 @@ cp -R agent-skills/mechanism-explainer ~/.claude/skills/
 - **벤더 이름을 본문에 쓰지 않는다.** 특정 도구 이름 대신 능력으로 쓴다 — "웹 페이지를 가져온다", "파일로 저장한다". 그래야 어느 에이전트에서든 돈다.
   단, **특정 도구를 제어하는 것 자체가 목적인 스킬은 예외다.** 도구 이름이 곧 내용이라 추상화하면 스킬이 할 일이 없어진다 (`herdr-dispatch`, `harness-backlog`).
 - **스킬 폴더에 README.md를 두지 않는다.** `SKILL.md`가 그 역할이고, 둘을 두면 어긋난다.
-- **내 취향을 스킬에 넣지 않는다.** 판별 기준:
+- **개인 취향을 스킬에 넣지 않는다.** 판별 기준:
 
   > *"다른 사람이 이 스킬을 깔았을 때, 이 줄이 그 사람에게도 참인가?"*
 
