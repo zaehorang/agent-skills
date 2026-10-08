@@ -764,7 +764,7 @@
                 class="legend-dot"
                 style="background: var(--accent)"
               ></span>
-              CLAUDE.md 보유</span
+              AGENTS.md 보유</span
             >
             <span
               ><span
@@ -845,7 +845,7 @@
               데이터 · supabase
             </text>
 
-            <!-- ============ ROOT CLAUDE.md (top center) ============ -->
+            <!-- ============ ROOT AGENTS.md (top center) ============ -->
             <g transform="translate(440,60)">
               <rect
                 class="node-card accent"
@@ -856,7 +856,7 @@
               <circle cx="22" cy="22" r="14" class="claude-ring" />
               <circle cx="22" cy="22" r="6" class="claude-dot" />
               <text x="44" y="26" class="node-title">
-                CLAUDE.md (root)
+                AGENTS.md (root)
               </text>
               <text x="44" y="42" class="node-meta">
                 프로젝트 개요 · 아키텍처 · API 엔드포인트 맵
@@ -876,12 +876,12 @@
             </g>
 
             <!-- ============ apps/web column ============ -->
-            <!-- web CLAUDE.md -->
+            <!-- web AGENTS.md -->
             <g transform="translate(60,180)">
               <rect class="node-card accent" width="280" height="64" rx="8" />
               <circle cx="22" cy="22" r="12" class="claude-ring" />
               <circle cx="22" cy="22" r="5" class="claude-dot" />
-              <text x="42" y="26" class="node-title">apps/web/CLAUDE.md</text>
+              <text x="42" y="26" class="node-title">apps/web/AGENTS.md</text>
               <text x="42" y="42" class="node-meta">
                 디렉터리 규약 · 네이밍 · TanStack Query 패턴
               </text>
@@ -980,12 +980,12 @@
             </g>
 
             <!-- ============ apps/api column ============ -->
-            <!-- api CLAUDE.md -->
+            <!-- api AGENTS.md -->
             <g transform="translate(450,180)">
               <rect class="node-card accent" width="280" height="64" rx="8" />
               <circle cx="22" cy="22" r="12" class="claude-ring" />
               <circle cx="22" cy="22" r="5" class="claude-dot" />
-              <text x="42" y="26" class="node-title">apps/api/CLAUDE.md</text>
+              <text x="42" y="26" class="node-title">apps/api/AGENTS.md</text>
               <text x="42" y="42" class="node-meta">
                 파서 레이아웃 · Red/Blue Box · Template Method
               </text>
@@ -1088,12 +1088,12 @@
             </g>
 
             <!-- ============ supabase column ============ -->
-            <!-- supabase CLAUDE.md -->
+            <!-- supabase AGENTS.md -->
             <g transform="translate(840,180)">
               <rect class="node-card accent" width="280" height="64" rx="8" />
               <circle cx="22" cy="22" r="12" class="claude-ring" />
               <circle cx="22" cy="22" r="5" class="claude-dot" />
-              <text x="42" y="26" class="node-title">supabase/CLAUDE.md</text>
+              <text x="42" y="26" class="node-title">supabase/AGENTS.md</text>
               <text x="42" y="42" class="node-meta">
                 스키마 규칙 · RLS · staleness 트리거
               </text>
@@ -1145,7 +1145,7 @@
             </g>
 
             <!-- =================== EDGES =================== -->
-            <!-- Root CLAUDE.md → each sub CLAUDE.md -->
+            <!-- Root AGENTS.md → each sub AGENTS.md -->
             <path
               class="edge edge-dash"
               d="M500,130 C 500,160 200,160 200,180"
@@ -1204,7 +1204,7 @@
               DB 입출력
             </text>
 
-            <!-- docs ← CLAUDE.md root -->
+            <!-- docs ← AGENTS.md root -->
             <path
               class="edge edge-dash"
               d="M740,95 C 900,95 980,95 980,402"
@@ -1224,7 +1224,7 @@
             <li>
               <div class="head">
                 <span class="tag tag-rule">Cat A</span>
-                root + 3 module CLAUDE.md 체계
+                root + 3 module AGENTS.md 체계
               </div>
               <div class="note">
                 root → web → api → supabase. 에이전트가 상위에서 하위로
@@ -1237,7 +1237,7 @@
                 Context drift 0% · husky pre-push 가동
               </div>
               <div class="note">
-                CLAUDE.md mtime 이 최근 코드 변경보다 신선함. pre-push
+                AGENTS.md mtime 이 최근 코드 변경보다 신선함. pre-push
                 hook 으로 빌드 게이트 가동 중.
               </div>
             </li>
@@ -1278,7 +1278,7 @@
               </div>
               <div class="note">
                 <strong>Effort 0.5 hr · Impact 10/10.</strong>
-                <code>AGENTS.md</code> · 각 CLAUDE.md 의 잘못된 경로
+                root · module <code>AGENTS.md</code> 의 잘못된 경로
                 (예: <code>src/middleware.ts</code> → 실제는
                 <code>apps/web/src/middleware.ts</code>) 를 정정. agent
                 의 가짜 path-following 즉시 차단.
@@ -1287,7 +1287,7 @@
             <li>
               <div class="head">
                 <span class="tag tag-rule">Cat A · S</span>
-                <code>scripts/</code> module 에 CLAUDE.md 신설
+                <code>scripts/</code> module 에 AGENTS.md 신설
               </div>
               <div class="note">
                 <strong>Effort 0.5 hr · Impact 9/10.</strong>
@@ -1330,7 +1330,7 @@
             <li>
               <div class="head">
                 <span class="tag tag-rule">Cat B · M</span>
-                <code>apps/web/CLAUDE.md</code> 압축 (360 → ~80 lines)
+                <code>apps/web/AGENTS.md</code> 압축 (360 → ~80 lines)
               </div>
               <div class="note">
                 <strong>Effort 2.0 hr · Impact 7/10.</strong>

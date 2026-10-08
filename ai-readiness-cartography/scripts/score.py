@@ -190,12 +190,25 @@ def find_all_context_files(repo: Path) -> list[Path]:
 
 
 def find_root_claude(repo: Path) -> Path | None:
-    """루트 진입점 브리핑. 벤더 중립 — CLAUDE.md / AGENTS.md 어느 쪽이든 인정한다."""
+    """루트 진입점 브리핑. 벤더 중립 — AGENTS.md / CLAUDE.md 어느 쪽이든 인정한다."""
     for name in PRIMARY_CONTEXT:
         p = repo / name
         if p.exists():
             return p
     return None
+
+
+def find_shadowed_agents(context_files: list[Path], repo: Path) -> list[str]:
+    """AGENTS.md 옆에 CLAUDE.md가 있으면 Claude Code는 CLAUDE.md만 읽는다.
+    CLAUDE.md가 `@AGENTS.md`로 import하지 않으면 AGENTS.md는 Claude에게 안 보인다."""
+    out: list[str] = []
+    for p in context_files:
+        if p.name != "AGENTS.md":
+            continue
+        claude = p.parent / "CLAUDE.md"
+        if claude.exists() and "@AGENTS.md" not in read_text(claude):
+            out.append(str(p.parent.relative_to(repo)) if p.parent != repo else ".")
+    return sorted(out)
 
 
 def count_lines(p: Path) -> int:
@@ -222,7 +235,7 @@ def file_mtime(p: Path) -> float:
 # ----------------------------------------------------------------------------
 # A. Navigation Coverage
 # ----------------------------------------------------------------------------
-def score_a(modules: list[Module], root_claude: Path | None) -> CategoryScore:
+def score_a(modules: list[Module], root_claude: Path | None, shadowed: list[str]) -> CategoryScore:
     total = max(1, len(modules))
     covered = sum(1 for m in modules if m.has_context)
     coverage = covered / total
@@ -236,7 +249,10 @@ def score_a(modules: list[Module], root_claude: Path | None) -> CategoryScore:
         gap_modules = [m.rel for m in modules if not m.has_context]
         findings.append(f"context 미보유 핵심 module {len(gap_modules)}개: {', '.join(gap_modules[:6])}")
     if root_claude is None:
-        findings.append("root CLAUDE.md / AGENTS.md 부재 — 진입점 브리핑 없음")
+        findings.append("root AGENTS.md / CLAUDE.md 부재 — 진입점 브리핑 없음")
+    if shadowed:
+        findings.append(f"AGENTS.md가 CLAUDE.md에 가려짐 {len(shadowed)}곳: {', '.join(shadowed[:6])}"
+                        " — Claude Code는 CLAUDE.md만 읽음 (`@AGENTS.md` import 없음)")
 
     return CategoryScore(
         name="AI Navigation & Coverage",
@@ -247,6 +263,7 @@ def score_a(modules: list[Module], root_claude: Path | None) -> CategoryScore:
             "covered_modules": covered,
             "coverage_ratio": round(coverage, 3),
             "root_claude": str(root_claude.name) if root_claude else None,
+            "shadowed_agents_md": shadowed,
         },
         findings=findings,
     )
@@ -691,7 +708,7 @@ def derive_actions(report_partial: dict[str, CategoryScore], modules: list[Modul
     missing = [m.rel for m in modules if not m.has_context]
     if missing:
         actions.append(Action(
-            title=f"{len(missing)}개 핵심 module에 CLAUDE.md 신설 ({', '.join(missing[:3])}{'…' if len(missing) > 3 else ''})",
+            title=f"{len(missing)}개 핵심 module에 AGENTS.md 신설 ({', '.join(missing[:3])}{'…' if len(missing) > 3 else ''})",
             category="A",
             effort="S", effort_hours=0.5 * len(missing),
             impact=f"task당 ~3 min × ~5 task/일 절감 → 모듈 1개당 주 1-2 hr 회수",
@@ -699,10 +716,22 @@ def derive_actions(report_partial: dict[str, CategoryScore], modules: list[Modul
             priority=9 / max(0.5, 0.5 * len(missing)),
         ))
 
+    # A — AGENTS.md shadowed by CLAUDE.md
+    shadowed = A.evidence.get("shadowed_agents_md", [])
+    if shadowed:
+        actions.append(Action(
+            title=f"CLAUDE.md에 `@AGENTS.md` import 추가 ({', '.join(shadowed[:3])}{'…' if len(shadowed) > 3 else ''})",
+            category="A",
+            effort="S", effort_hours=0.1 * len(shadowed),
+            impact="Claude Code가 AGENTS.md를 아예 안 읽는 상태 해소 — 다른 에이전트와 같은 context를 봄",
+            impact_score=8,
+            priority=8 / max(0.5, 0.1 * len(shadowed)),
+        ))
+
     # B — over-long context
     if B.evidence.get("max_lines", 0) > 100:
         actions.append(Action(
-            title="과도한 CLAUDE.md를 25-35 lines로 압축 (compass-not-encyclopedia)",
+            title="과도한 context 파일을 25-35 lines로 압축 (compass-not-encyclopedia)",
             category="B",
             effort="M", effort_hours=2.0,
             impact="agent context 로드 시간 단축 + 핵심 정보 가시성 ↑",
@@ -832,7 +861,7 @@ def build_report(repo: Path) -> Report:
     large_files = find_large_files(repo, 300)
 
     cats = {
-        "A": score_a(modules, root_claude),
+        "A": score_a(modules, root_claude, find_shadowed_agents(context_files, repo)),
         "B": score_b(context_files, repo),
         "C": score_c(modules, repo),
         "D": score_d(repo, context_files),
