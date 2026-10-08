@@ -141,7 +141,9 @@ status: "pending"
    Codex 훅은 승인한 뒤 끝나는 세션부터 돈다. 대화형 Codex는 `/exit` 후 약 1분 뒤(데몬이 대화를 정리할 때) 돈다.
 5. `setup.py --check`로 확인한다. 스킬을 고쳤다면 **원본(horang-skills)의** `setup.py --project <경로> --apply`로 사본을 갱신한다.
    프로젝트 안의 사본으로 실행하면 자기 자신이라 갱신하지 않는다.
-6. 제거는 `setup.py --uninstall`로 계획을 보이고 승인 후 `--apply`. `history/`는 남는다.
+   worktree에서 실행하면 커밋할 파일(AGENTS.md · 훅 설정 · .gitignore)은 그 worktree에, 스킬 사본 · Codex 링크 · 기록은 주 디렉터리에 쓴다.
+   그 뒤 worktree의 변경을 커밋해 PR로 올린다.
+6. 제거는 `setup.py --uninstall`로 계획을 보이고 승인 후 `--apply`. `.local/harness-backlog/`(기록)는 남는다.
 
 ## 검토 지침을 고칠 때 (스킬 개발용)
 
