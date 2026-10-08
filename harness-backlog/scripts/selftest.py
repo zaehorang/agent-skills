@@ -622,6 +622,40 @@ print(json.dumps(rs.unreviewed(rows, hb.ledger_read(Path({str(e.project)!r})))))
     assert r.returncode == 0 and json.loads(r.stdout) == [], r.stderr
 
 
+def t_real_format_quirks(e: Env):
+    d = e.codex_home / "sessions" / "2026" / "10" / "06"
+    d.mkdir(parents=True, exist_ok=True)
+    msg = lambda text: {"type": "response_item", "timestamp": "2026-10-06T02:00:01Z",
+                        "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": text}]}}
+    meta = lambda sid, src: {"type": "session_meta", "payload": {"id": sid, "cwd": str(e.project), "thread_source": src}}
+    for sid, src in (("sub1", "subagent"), ("grd1", "guardian_review")):
+        (d / f"rollout-x-{sid}.jsonl").write_text("\n".join(json.dumps(r) for r in [meta(sid, src), msg("하위 작업")]) + "\n")
+    out = [{"type": "input_text", "text": "Script completed\nWall time 0.1 seconds\nOutput:\n"},
+           {"type": "input_text", "text": json.dumps({"exit_code": 1, "output": "pytest: 2 failed"})}]
+    rows = [meta("main1", "user"),
+            msg("<recommended_plugins>\nHere is a list"), msg("<user_action>\n<context>review</context>"),
+            msg("# Files mentioned by the user:\n\n## a.png: /tmp/a.png\n\n## My request:\n배포 문서 고쳐줘\n<image name=[Image #1] path=\"/tmp/a.png\"></image>"),
+            msg("<user_shell_command>\n<command>\nls docs\n</command>\n<result>ok</result>"),
+            {"type": "response_item", "payload": {"type": "custom_tool_call", "name": "exec", "call_id": "c1", "arguments": "x"}},
+            {"type": "response_item", "payload": {"type": "custom_tool_call_output", "call_id": "c1", "output": json.dumps(out)}}]
+    (d / "rollout-x-main1.jsonl").write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n")
+    keys = [r["key"] for r in json.loads(e.run("read_sessions.py", "--project", str(e.project), "list", "--all", "--json").stdout)]
+    assert keys == ["codex:main1"], keys  # subagent · guardian 스레드는 세션이 아니다
+    data = json.loads(e.run("read_sessions.py", "show", "--agent", "codex", "--session", "main1", "--json").stdout)
+    users = [(t.get("kind"), t["text"]) for t in data["session"]["turns"] if t["role"] == "user"]
+    assert users == [("message", "배포 문서 고쳐줘\n[이미지]"), ("command", "[사용자 명령] ls docs")], users
+    res = [t for t in data["session"]["turns"] if t["role"] == "tool_result"][0]
+    assert res["text"] == "exit_code: 1\npytest: 2 failed" and res["error"], res
+    # Claude 대화 압축 요약은 사용자 발화가 아니다
+    cd = e.claude_home / "projects" / "-proj"
+    cd.mkdir(parents=True)
+    (cd / "cmp.jsonl").write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in [
+        {"type": "user", "sessionId": "cmp", "cwd": str(e.project), "isCompactSummary": True, "message": {"content": "요약: 사용자가 X를 지적함"}},
+        {"type": "user", "sessionId": "cmp", "cwd": str(e.project), "message": {"content": "진짜 요청"}}]) + "\n")
+    data = json.loads(e.run("read_sessions.py", "show", "--agent", "claude", "--session", "cmp", "--json").stdout)
+    assert [t["text"] for t in data["session"]["turns"] if t["role"] == "user"] == ["진짜 요청"]
+
+
 TESTS = {k[2:]: v for k, v in globals().items() if k.startswith("t_")}
 
 

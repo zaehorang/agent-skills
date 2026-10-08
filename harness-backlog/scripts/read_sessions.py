@@ -32,7 +32,13 @@ REVERT_RE = re.compile(r"\bgit\s+(?:revert|reset\s+--hard|restore|checkout\s+--|
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit", "apply_patch"}
 SEARCH_RE = re.compile(r"(?:^|[;&|]\s*|\s)(?:rg|grep|find|fd|ag)\s")
 READ_CMDS = {"cat", "sed", "head", "tail", "nl", "less", "bat"}
-CODEX_NOISE = ("# AGENTS.md instructions", "<skill>", "<environment_context>", "<user_instructions>", "<INSTRUCTIONS>", "<turn_aborted>")
+# Codex가 사용자 메시지 자리에 끼워 넣는 것. 사용자의 말이 아니다.
+CODEX_NOISE = ("# AGENTS.md instructions", "<skill>", "<environment_context>", "<user_instructions>", "<INSTRUCTIONS>",
+               "<turn_aborted>", "<recommended_plugins>", "<codex_internal_context", "<user_action>",
+               "The following is the Codex agent history")
+MY_REQUEST_RE = re.compile(r"^## My request[^\n]*:\s*\n", re.M)  # 첨부·탭 정보 머리말 뒤의 진짜 요청
+IMAGE_TAG_RE = re.compile(r"<image\b[^>]*>(?:</image>)?")
+SHELL_CMD_RE = re.compile(r"<user_shell_command>\s*<command>\s*(.*?)\s*</command>", re.S)
 REMINDER_RE = re.compile(r"<system-reminder>.*?</system-reminder>", re.S)
 
 
@@ -73,6 +79,9 @@ def _codex_meta(path: Path) -> dict | None:
     for e in _lines(path):
         if e.get("type") == "session_meta":
             p = e.get("payload", {})
+            # subagent · guardian_review 스레드는 사용자 세션이 아니다 (SessionEnd 훅도 안 돈다)
+            if p.get("thread_source") not in (None, "user"):
+                return None
             return {"id": p.get("id"), "cwd": p.get("cwd"), "start": p.get("timestamp")}
         break
     return None
@@ -131,8 +140,8 @@ def _claude_user_text(text: str) -> tuple[str, str] | None:
 def normalize_claude(path: Path) -> dict:
     turns, tool_names, model, meta = [], {}, None, None
     for e in _lines(path):
-        if e.get("isSidechain"):
-            continue
+        if e.get("isSidechain") or e.get("isCompactSummary"):
+            continue  # 하위 에이전트 기록, 대화 압축 요약(모델이 쓴 글)은 사용자 발화가 아니다
         meta = meta or ({"id": e["sessionId"], "cwd": e.get("cwd")} if e.get("sessionId") and e.get("cwd") else None)
         ts = e.get("timestamp")
         if e.get("type") == "attachment":
@@ -190,6 +199,50 @@ def _codex_cmd(payload: dict) -> str:
     return raw
 
 
+def _codex_user_text(text: str) -> tuple[str, str] | None:
+    text = text.strip()
+    m = SHELL_CMD_RE.match(text)
+    if m:
+        return "command", f"[사용자 명령] {m.group(1)}"
+    if not text or text.startswith(CODEX_NOISE):
+        return None
+    m = MY_REQUEST_RE.search(text)
+    if m:
+        text = text[m.end():].strip()
+    text = IMAGE_TAG_RE.sub("[이미지]", text).strip()
+    return ("message", text) if text else None
+
+
+def _codex_output_text(out) -> str:
+    """도구 출력은 [{"type": "input_text", "text": ...}] 목록으로 오기도 한다. 글자 부분만 잇는다."""
+    if isinstance(out, str):
+        try:
+            parsed = json.loads(out)
+        except json.JSONDecodeError:
+            return out
+        out = parsed if isinstance(parsed, list) else out
+    if isinstance(out, list):
+        parts = [_unwrap_exec(x.get("text", "")) for x in out if isinstance(x, dict)]
+        return "\n".join(p for p in parts if p) or json.dumps(out, ensure_ascii=False)
+    return out if isinstance(out, str) else json.dumps(out, ensure_ascii=False)
+
+
+EXEC_HEAD_RE = re.compile(r"^Script completed\s*\nWall time[^\n]*\n(?:Output:\s*\n?)?")
+
+
+def _unwrap_exec(text: str) -> str:
+    """'Script completed / Wall time' 머리말을 걷고, {"exit_code":…, "output":…} 은 코드와 출력만 남긴다."""
+    text = EXEC_HEAD_RE.sub("", text)
+    try:
+        obj = json.loads(text)
+    except json.JSONDecodeError:
+        return text.strip()
+    if isinstance(obj, dict) and "output" in obj:
+        code = obj.get("exit_code")
+        return (f"exit_code: {code}\n" if code is not None else "") + str(obj["output"]).strip()
+    return text.strip()
+
+
 def normalize_codex(path: Path) -> dict:
     turns, model, meta, names = [], None, {}, {}
     for e in _lines(path):
@@ -203,8 +256,10 @@ def normalize_codex(path: Path) -> dict:
             pt = p.get("type")
             if pt == "message":
                 text = "\n".join(c.get("text", "") for c in p.get("content") or [] if isinstance(c, dict))
-                if p.get("role") == "user" and text.strip() and not text.lstrip().startswith(CODEX_NOISE):
-                    _turn(turns, "user", ts, model, text, kind="message")
+                if p.get("role") == "user":
+                    got = _codex_user_text(text)
+                    if got:
+                        _turn(turns, "user", ts, model, got[1], kind=got[0])
                 elif p.get("role") == "assistant" and text.strip():
                     _turn(turns, "assistant", ts, model, text)
             elif pt in ("function_call", "custom_tool_call", "local_shell_call"):
@@ -213,8 +268,7 @@ def normalize_codex(path: Path) -> dict:
                 tool = "apply_patch" if "apply_patch" in (p.get("name") or "") or "*** Begin Patch" in cmd else (p.get("name") or "shell")
                 _turn(turns, "tool_call", ts, model, cmd, tool=tool, input={"command": cmd})
             elif pt in ("function_call_output", "custom_tool_call_output", "local_shell_call_output"):
-                out = p.get("output")
-                out = out if isinstance(out, str) else json.dumps(out, ensure_ascii=False)
+                out = _codex_output_text(p.get("output"))
                 codes = [int(c) for c in EXIT_RE.findall(out)]
                 err = any(c != 0 for c in codes) or "aborted by user" in out or "rejected" in out.lower()[:200]
                 if "rejected by user" in out.lower() or "aborted by user" in out:

@@ -132,7 +132,8 @@ status: "pending"
 2. 없는 파일(`+ 새로 만듦`)은 단위마다 만들지 묻는다. 기존 파일 수정은 diff를 보여준다.
 3. 승인받은 단위만 `setup.py --project <경로> --apply --create <단위…>`로 적용한다.
 4. 출력의 "직접 할 일"을 전한다: Codex의 `/hooks`로 훅 승인, 두 CLI 로그인.
-5. `setup.py --check`로 확인한다. 스킬을 고쳤다면 다시 `setup.py --apply`로 사본을 갱신한다.
+5. `setup.py --check`로 확인한다. 스킬을 고쳤다면 **원본(agent-skills)의** `setup.py --project <경로> --apply`로 사본을 갱신한다.
+   프로젝트 안의 사본으로 실행하면 자기 자신이라 갱신하지 않는다.
 6. 제거는 `setup.py --uninstall`로 계획을 보이고 승인 후 `--apply`. `history/`는 남는다.
 
 ## 하네스를 스스로 고치지 않는다
