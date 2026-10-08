@@ -1,6 +1,6 @@
 # horang-skills
 
-내가 쓰는 **Agent Skills** 모음. 역할별 묶음을 Claude Code 플러그인으로 깔거나, 필요한 폴더만 가져다 쓰면 된다.
+**Agent Skills** 모음. 역할별 묶음을 Claude Code 플러그인으로 깔거나, 필요한 폴더만 가져다 쓰면 된다.
 
 [Agent Skills](https://agentskills.io)는 에이전트에게 절차적 지식을 넘기는 오픈 포맷이다.
 폴더 하나 = 스킬 하나이고, 안의 `SKILL.md`가 전부다. Claude Code · Codex · Cursor · Gemini CLI 등이 같은 포맷을 읽는다.
@@ -162,7 +162,7 @@ cp -R horang-skills/mechanism-explainer ~/.claude/skills/
 - **벤더 이름을 본문에 쓰지 않는다.** 특정 도구 이름 대신 능력으로 쓴다 — "웹 페이지를 가져온다", "파일로 저장한다". 그래야 어느 에이전트에서든 돈다.
   단, **특정 도구를 제어하는 것 자체가 목적인 스킬은 예외다.** 도구 이름이 곧 내용이라 추상화하면 스킬이 할 일이 없어진다 (`herdr-dispatch`, `harness-backlog`).
 - **스킬 폴더에 README.md를 두지 않는다.** `SKILL.md`가 그 역할이고, 둘을 두면 어긋난다.
-- **내 취향을 스킬에 넣지 않는다.** 판별 기준:
+- **개인 취향을 스킬에 넣지 않는다.** 판별 기준:
 
   > *"다른 사람이 이 스킬을 깔았을 때, 이 줄이 그 사람에게도 참인가?"*
 
