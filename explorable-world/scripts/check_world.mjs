@@ -148,13 +148,13 @@ if (/\b(web|app|test|foo|bar)\.yaml\b/.test(allText)) warn("예시 파일·리�
   const idle = [];
   if (heroes.size)
     for (const id of used) {
-      if (!actors[id] || heroes.has(id)) continue;
+      if (!actors[id] || heroes.has(id) || actors[id].hero === false) continue;   // hero:false 는 눌러 보기 전용으로 명시한 것
       const tip = strip(actors[id].tip);
       if (pending.some(t => t && tip.includes(t))) continue;   // 준비 중 사건 전용이면 tip 에 그 사건 제목이 있다
       idle.push(`${id}(${strip(actors[id].name)})`);
     }
   if (idle.length)
-    warn(`지도에 있지만 준비된 사건의 어느 장면에서도 주인공이 아닌 부품: ${idle.join(", ")} — 장면에서 쓰거나, 준비 중 사건 전용이면 tip 에 그 사건 제목('${pending[0] || "…"}' 처럼)을 쓰거나, 지도에서 줄인다. (배경 구역·소품이라 일부러 둔 것이면 무시)`);
+    warn(`지도에 있지만 준비된 사건의 어느 장면에서도 주인공이 아닌 부품: ${idle.join(", ")} — 장면에서 쓰거나, 준비 중 사건 전용이면 tip 에 그 사건 제목('${pending[0] || "…"}' 처럼)을 쓰거나, 눌러 보기 전용(배경 구역·소품)이면 actors 에 hero:false 를 명시한다`);
 }
 
 report();

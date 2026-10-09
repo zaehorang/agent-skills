@@ -3,7 +3,7 @@
 "use strict";
 
 var ACTORS = {
-  hill:{ name:"관제 언덕", real:"Control Plane",
+  hill:{ name:"관제 언덕", real:"Control Plane", hero:false,
     tip:"클러스터의 '두뇌'가 모인 곳이에요. 무엇을 어디서 돌릴지 여기서 정해요.",
     what:"관제탑 접수 창구, 금고 장부, 순찰 로봇, 크레인 배치원이 모두 이 소속이에요. 이들은 직접 컨테이너를 돌리지 않고, <b>결정하고 기록하는 일</b>만 해요. 실제 실행은 부두(Worker Node)가 맡아요.",
     talks:[["부두 반장 (kubelet)","HTTPS","할 일을 알려 주고 보고를 받음"],["사람 (kubectl)","HTTPS","요청을 받음"]],
@@ -45,7 +45,7 @@ var ACTORS = {
           {l:"자리가 없을 때", code:"<span class='k'>$ kubectl describe pod my-shop-7d9f6c-4xk2p</span>\nEvents:\n  Type     Reason            Age   From               Message\n  ----     ------            ----  ----               -------\n  Warning  FailedScheduling  12s   default-scheduler  0/3 nodes are available: 1 node(s) had untolerated taint {node-role.kubernetes.io/control-plane: }, 2 Insufficient memory. <span class='c'>(… 이어지는 preemption 설명은 생략)</span>"}],
     myth:"스케줄러가 컨테이너를 부두로 보낸다? — 이름 한 줄을 적을 뿐이에요. 실제로 띄우는 건 그 부두의 반장이에요." },
 
-  yard:{ name:"대기 구역", real:"Pending Pod (nodeName 없음)",
+  yard:{ name:"대기 구역", real:"Pending Pod (nodeName 없음)", hero:false,
     tip:"장부에는 있지만 아직 어느 부두에 둘지 정해지지 않은 컨테이너가 기다리는 곳이에요.",
     what:"로봇이 만든 컨테이너 기록은 처음에 <b>자리(nodeName)가 비어</b> 있어요. 실제로 이런 '장소'가 있는 건 아니고, 크레인 배치원의 대기열에서 차례를 기다리는 상태를 그림으로 표현한 거예요.",
     talks:[["순찰 로봇","—","기록을 만들어 둠"],["크레인 배치원","watch","꺼내서 자리를 정함"]],
@@ -62,7 +62,7 @@ var ACTORS = {
           {l:"파일 이름은 상관없어요", code:"<span class='k'>$ kubectl apply -f 아무이름.yaml</span>   <span class='c'># 파일 이름은 kubectl이 신경 쓰지 않아요</span>\n<span class='c'># 쿠버네티스에 등록되는 이름은 파일 안의 metadata.name 이에요</span>"}],
     myth:"kubectl apply가 컨테이너를 띄운다? — 장부에 원하는 상태를 적는 순간 끝나요. 띄우는 건 그 뒤 다른 부품들이에요." },
 
-  pier:{ name:"부두", real:"Worker Node",
+  pier:{ name:"부두", real:"Worker Node", hero:false,
     tip:"컨테이너가 실제로 돌아가는 컴퓨터예요. 부두마다 반장과 하역 기계가 있어요.",
     what:"실제 서버(또는 가상 머신) 한 대예요. 부두마다 <b>반장(kubelet)</b>, <b>하역 기계(containerd)</b>, <b>길 안내 규칙(kube-proxy)</b>이 상주해요. 부두가 많을수록 더 많은 컨테이너를 둘 수 있어요.",
     talks:[["관제탑 접수 창구","HTTPS","반장이 할 일을 받고 상태를 보고"]],
@@ -78,7 +78,7 @@ var ACTORS = {
     xr:[{l:"반장은 컨테이너가 아니라 서버의 서비스로 돌아요", code:"<span class='k'>$ systemctl status kubelet</span>\n● kubelet.service - kubelet: The Kubernetes Node Agent\n   Active: <span class='g'>active (running)</span>"}],
     myth:"반장이 다른 부두 컨테이너도 챙긴다? — 자기 부두 몫만 봐요. 그래서 부두가 수천 개여도 창구 하나로 버틸 수 있어요." },
 
-  machine:{ name:"하역 기계", real:"containerd (컨테이너 런타임)",
+  machine:{ name:"하역 기계", real:"containerd (컨테이너 런타임)", hero:false,
     tip:"반장의 지시를 받아 이미지를 받아 오고 컨테이너를 실제로 켜는 기계예요.",
     what:"반장과는 <b>CRI라는 표준 규격</b>으로 대화해요. 규격만 맞으면 다른 기계(CRI-O)로 바꿔도 돼요. 실제 격리는 runc가 리눅스 namespace·cgroup으로 만들어요.",
     talks:[["부두 반장 (kubelet)","CRI (gRPC)","RunPodSandbox · PullImage · StartContainer"],["이미지 저장소","HTTPS","이미지 레이어 받기"]],
@@ -86,7 +86,7 @@ var ACTORS = {
     xr:[{l:"기계에게 직접 물어보기", code:"<span class='k'>$ sudo crictl ps</span>\nCONTAINER     IMAGE        STATE     NAME   POD\n3f1a9c2e7b0d  nginx:1.27   <span class='g'>Running</span>   my-shop    my-shop-7d9f6c-4xk2p"}],
     myth:"쿠버네티스에는 Docker가 필수다? — CRI 규격을 지키는 런타임이면 돼요. 1.24부터 Docker 직접 연결은 빠졌어요." },
 
-  pod:{ name:"컨테이너 묶음", real:"Pod",
+  pod:{ name:"컨테이너 묶음", real:"Pod", hero:false,
     tip:"쿠버네티스가 다루는 가장 작은 배포 단위예요. 그림의 상자 하나가 Pod 하나예요.",
     what:"Pod 안에는 컨테이너가 <b>하나 이상</b> 들어갈 수 있고, 같은 Pod의 컨테이너는 IP 하나와 저장 공간을 나눠 써요. Pod는 고쳐 쓰지 않는 소모품이에요. 문제가 생기면 지우고 새로 만들어요.",
     talks:[["같은 Pod의 다른 컨테이너","localhost","네트워크 공유"],["다른 Pod","Pod IP · Service","배선(CNI)으로 연결"]],
@@ -94,7 +94,7 @@ var ACTORS = {
     xr:[{l:"Pod 하나 자세히 보기", code:"<span class='k'>$ kubectl describe pod my-shop-7d9f6c-4xk2p</span>\nNode:    worker-2/10.0.0.12\nStatus:  Running\nIP:      10.244.2.4\nContainers:\n  my-shop:  Image: nginx:1.27"}],
     myth:"점선 상자도 실제로 존재한다? — 점선은 장부에만 있는 기록이에요. 반장이 실행해야 색이 채워진 진짜 상자가 돼요." },
 
-  ship:{ name:"이미지 저장소선", real:"Container Registry",
+  ship:{ name:"이미지 저장소선", real:"Container Registry", hero:false,
     tip:"컨테이너의 재료(이미지)를 싣고 있는 배예요. 하역 기계가 필요할 때 받아 가요.",
     what:"Docker Hub, ECR, Harbor 같은 이미지 저장소예요. 쿠버네티스 바깥에 있고, 하역 기계가 <b>이미지 이름(nginx:1.27)</b>으로 찾아서 받아 와요. 이름이 틀리면 받지 못해 컨테이너가 시작되지 않아요.",
     talks:[["하역 기계 (containerd)","HTTPS","이미지 레이어 전달"]],
@@ -102,7 +102,7 @@ var ACTORS = {
     xr:[{l:"이름이 틀렸을 때", code:"Warning  Failed  Failed to pull image \"ngin:1.27\":\n         pull access denied, repository does not exist\nWarning  Failed  Error: <span class='y'>ImagePullBackOff</span>"}],
     myth:"매번 이미지를 처음부터 받는다? — 부두에 이미 있는 레이어는 다시 받지 않아요." },
 
-  cni:{ name:"배선", real:"CNI plugin (Calico · Cilium · Flannel)",
+  cni:{ name:"배선", real:"CNI plugin (Calico · Cilium · Flannel)", hero:false,
     tip:"컨테이너마다 주소(IP)를 붙이고 부두끼리 통하게 하는 배선이에요.",
     what:"쿠버네티스는 '컨테이너마다 IP가 있고 서로 바로 통해야 한다'는 <b>규격만</b> 정해요. 실제 배선 공사는 Calico·Cilium 같은 플러그인이 해요. 배선이 없으면 부두는 Ready가 되지 못해요.",
     talks:[["하역 기계 (RunPodSandbox 안에서)","CNI (ADD / DEL)","컨테이너 네트워크 연결·해제"]],
