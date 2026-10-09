@@ -60,8 +60,10 @@
 | 스킬 | 하는 일 | 산출물 |
 |---|---|---|
 | [`behavior-spec-extraction`](./behavior-spec-extraction) | 기존 코드에서 구현 용어를 걷어낸 "관측 가능한 동작" 명세를 역추출한다. linter가 구현 누출을 막는다 | 명세 `.md` (코드 블록 없음) |
-| [`herdr-dispatch`](./herdr-dispatch) | 옆 pane에 일을 넘길 때 모델 · 추론 강도 · 권한을 역할표로 고른다 | 알맞게 설정된 pane + 선택 근거 |
+| [`herdr-dispatch`](./herdr-dispatch) | 옆 pane에 일을 넘길 때 모델 · 추론 강도 · 권한을 역할표로 고른다. 표가 낡으면 `doctor`가 잡고, 벤더별 pane이 자기 쪽을 재검증한다 | 알맞게 설정된 pane + 선택 근거 |
 | [`harness-backlog`](./harness-backlog) | 세션이 끝나면 다른 모델이 harness 빈틈을 backlog에 제안한다. 반영은 사람이 한다 | `.local/harness-backlog/*.md` + 설치 스크립트 |
+
+`herdr-dispatch`의 모델명·플래그 표는 낡는다. `scripts/doctor.py`가 설치된 CLI·모델 캐시·전역 설정과 표를 몇 초 안에 대조하고, "모델 업데이트 확인해"라고 하면 `references/verify.md` 절차대로 claude pane과 codex pane이 각자 자기 벤더 문서를 공식 출처와 교차 확인한다.
 
 ---
 
