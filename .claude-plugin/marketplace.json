@@ -4,7 +4,7 @@
     "name": "zaehorang",
     "url": "https://github.com/zaehorang"
   },
-  "description": "이해하기 어려운 것을, 사람이 검수할 수 있는 산출물로 바꾸는 스킬 모음. 지금은 study 묶음만 플러그인으로 설치한다",
+  "description": "이해하기 어려운 것을, 사람이 검수할 수 있는 산출물로 바꾸는 스킬 모음. study(이해하기)와 dev(개발하기) 묶음을 플러그인으로 설치한다",
   "plugins": [
     {
       "name": "study",
@@ -15,6 +15,16 @@
         "./explorable-world"
       ],
       "category": "learning"
+    },
+    {
+      "name": "dev",
+      "description": "개발하기 — repo의 에이전트 친화도를 채점하고(ai-readiness-cartography), herdr pane에 일을 넘길 때 모델·권한을 고른다(herdr-dispatch)",
+      "source": "./",
+      "skills": [
+        "./ai-readiness-cartography",
+        "./herdr-dispatch"
+      ],
+      "category": "development"
     }
   ]
 }
