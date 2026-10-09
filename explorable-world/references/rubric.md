@@ -79,7 +79,8 @@ C: C1 2 · C2 2 · C3 1 · C4 2 · C5 2 · C6 2 · C7 2 = 13/14 → 합격
 
 ## 기준점
 
-| 지도 | A | B (1078×949) | C |
-|---|---|---|---|
-| `examples/k8s-harbor` (수정 전) | OK | @1078x949 pass · B6 12.1px · B7 2 (하역 기계 라벨) · @1120x699 **fail** B6 10.0px | 평가 기록 `evals/results/` 참고 |
-| `examples/k8s-harbor` (수정 후) | OK | @1512x828 · @1120x700 pass (B6 16.2 · 12.1px, B7 0, B8 –, B9 경고 2) · @1000x600 B6 10.4px 로 fail (가로 1000px 은 `home.s ≥ 1.16`+글꼴 16.5 가 필요 — world-design.md 계산법) | `evals/results/2026-10-08-skill-fixes.md` |
+| 지도 | A | B |
+|---|---|---|
+| `examples/k8s-harbor` | OK (경고 0) | @1512x828 · @1120x700 pass (B6 16.2 · 12.1px, B7 0, B8 –, B9 경고 2) · @1000x600 B6 10.4px 로 fail (가로 1000px 은 `home.s ≥ 1.16`+글꼴 16.5 가 필요 — world-design.md 계산법) |
+
+2026-10-08 수정 전에는 @1120x699 에서 B6 10.0px 로 fail 이었다(`home.s`·글꼴 조정으로 통과). C 점수의 평가 기록은 `evals/results/` 에 쓰며 버전 관리 밖이라 여기에는 적지 않는다 — 기준점이 필요하면 `evals/cases.md` 절차로 예시를 다시 채점한다.
