@@ -175,6 +175,9 @@ def check(path: Path) -> tuple[list[str], list[str]]:
             + " 아까운 내용은 terms 나 판정 문장으로 옮긴다 (SKILL.md 2절 ③)"
         )
 
+    if re.search(r"\bTODO\b", text):
+        warn.append("TODO 가 남아 있다 — 템플릿 자리표시 내용을 다 바꿨는지 확인한다")
+
     if scan.buttons and not scan.aria_live:
         warn.append("aria-live 자리가 없다 — 조작 결과를 말해 주는 판정 문장에 붙었는지 확인한다")
     if "aria-pressed" not in text and scan.buttons > 2:
