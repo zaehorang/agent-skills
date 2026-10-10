@@ -79,6 +79,6 @@ C: C1 2 · C2 2 · C3 1 · C4 2 · C5 2 · C6 2 · C7 2 = 13/14 → 합격
 | 파일 | A | B |
 |---|---|---|
 | `template/index.html` | OK (TODO 경고만) | @1512x772 stageW 935 pass — B4 12.2px(전체 보기) · B5 10.3px · warns: stepsWithoutDemo [1,3] · restoreWeak [2] |
-| `references/examples/container-orchestration.html` | OK | @1512x772 stageW 935 **fail** — B4 1~7단계 11.4~11.5px(8·9단계 15.5px) · B5 9.4~9.5px · 나머지 전부 통과, 9단계 모두 시연 있음. 이 창에서는 무대가 935px 라 2절 식대로 12px 에 못 미친다 — 1680px 창(무대 ≈ 1030px)에서는 12.6px |
+| `references/examples/container-orchestration.html` | OK | @1512x828 stageW 1000 pass — B4 12.1px(1단계 전체 보기) · 14.8~15px(2~7단계) · 20.1px(8·9단계) · B5 10.3~17.3px · 9단계 모두 시연 있음, 되돌리기·auto·잘림·에러 0 |
 
 C 점수의 평가 기록은 `evals/results/` 에 쓰며 버전 관리 밖이라 여기에는 적지 않는다 — 기준점이 필요하면 `evals/cases.md` 절차로 예시를 다시 채점한다.
