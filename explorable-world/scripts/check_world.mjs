@@ -14,12 +14,13 @@ const fail = m => fails.push(m), warn = m => warns.push(m);
 const strip = s => String(s || "").replace(/<[^>]+>/g, "").replace(/&[a-z]+;/g, "x");
 
 // 1. 파일
-const FILES = ["index.html", "style.css", "iso.js", "engine.js", "world.js", "content.js", "world.css"];
+const ENGINE = ["index.html", "style.css", "iso.js", "engine.js", "gsap.min.js", "MotionPathPlugin.min.js"];
+const FILES = ENGINE.concat(["world.js", "content.js", "world.css"]);
 for (const f of FILES) if (!existsSync(join(dir, f))) fail(`파일 없음: ${f}`);
 if (fails.length) report();
 
 // 2. 엔진이 스킬 최신본과 같은가
-for (const f of ["index.html", "style.css", "iso.js", "engine.js"]) {
+for (const f of ENGINE) {
   const a = readFileSync(join(dir, f), "utf8"), bp = join(SKILL, "engine", f);
   if (existsSync(bp) && a !== readFileSync(bp, "utf8")) warn(`엔진 파일이 스킬 최신본과 다름: ${f} — 의도한 수정이 아니면 new_world.mjs --engine-only 로 갱신`);
 }

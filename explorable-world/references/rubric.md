@@ -12,8 +12,7 @@ node <스킬>/scripts/check_world.mjs <폴더>
 
 ## B. 브라우저 자동 검사 — 숫자로 판정
 
-1. 폴더를 로컬 서버로 연다. **포트를 바꿔 가며 연다** — 같은 포트로 다시 열면 브라우저가 예전 `world.js` 를 캐시에서 읽는다.
-   스킬 폴더 밖이면 그 폴더에서 `python3 -m http.server <새 포트>`.
+1. 폴더를 로컬 서버로 연다(`python3 -m http.server <포트>`). 브라우저 자동화의 함정(캐시 포트·백그라운드 탭·45초)은 `pitfalls.md` 확인 절.
 2. 콘솔 에러를 자동화 도구로 읽는다(페이지를 연 직후 에러는 아래 스크립트가 못 잡는다).
 3. `scripts/verify_browser.js` 내용을 페이지에서 실행하고 `await EWV.all()` 결과의 `summary` 를 본다.
    지도 폴더를 서버 루트로 열었다면 스크립트는 같은 서버에 없다 — `<스킬>/scripts/verify_browser.js` 파일을 읽어 그 **내용 전체를 JS 실행에 붙여 넣고**, 같은 호출 끝에 `await EWV.all()` 을 둔다.
